@@ -1,0 +1,28 @@
+{
+  "name": "source-mapped-visual-editor",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "A React visual editor that writes no source of its own: edits appear as DOM overrides, a headless coding agent puts them in the file, and hot reload returning the same result is the proof it landed.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit --pretty",
+    "e2e": "playwright test",
+    "e2e:live": "cross-env SVE_AGENT=claude playwright test",
+    "dev": "npm run dev -w @sve/demo"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "cross-env": "^10.1.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@sve/protocol": ["./packages/protocol/src/index.ts"],
+      "@sve/source-loc": ["./packages/source-loc/src/index.ts"],
+      "@sve/overlay": ["./packages/overlay/src/index.ts"],
+      "@sve/bridge": ["./packages/bridge/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src", "packages/*/test", "apps/*/src", "e2e", "*.config.ts"]
+}
