@@ -1,0 +1,192 @@
+@import 'tailwindcss';
+
+/*
+  Sounding — cold coastal.
+
+  The page is sea fog (`haar`) with brine-dark ink, and brine returns as a ground only
+  where the page stops forecasting and starts explaining itself: the sample-data notice,
+  the tide ribbon, the method. Hue carries meaning and nothing else may borrow it:
+
+    kelp    safe        ochre   marginal
+    flare   act here — the now-marker, the current beach, every focus ring
+    glacier the water itself, and only inside the ribbon
+
+  Deliberately unlike the editor chrome, which is ink + a single warm paper strip.
+  Nothing here is cream, and nothing there is teal.
+*/
+@theme {
+  --color-haar: #e4ebe8;
+  --color-haar-lift: #f2f6f4;
+  --color-haar-sink: #d7e1dd;
+  --color-brine: #0b252b;
+  --color-brine-2: #10333b;
+  --color-brine-3: #1b4d58;
+  --color-slate: #4e6b70;
+  --color-rule: #c5d3cf;
+
+  --color-flare: #ff5a1f;
+  --color-kelp: #0c6152;
+  --color-kelp-wash: #d3e6df;
+  --color-kelp-lift: #3fbea0;
+  --color-ochre: #7a5605;
+  --color-ochre-wash: #f0e7cd;
+  --color-ochre-lift: #d9a92c;
+  --color-glacier: #7ec8d8;
+
+  --font-display:
+    'Space Grotesk', ui-sans-serif, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Public Sans', ui-sans-serif, 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-haar);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-haar);
+    color: var(--color-brine);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  /* Space Grotesk ships tabular figures, which is why it carries every readout. */
+  :where(h1, h2, h3, .display, .readout) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-flare);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-flare);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .label {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    line-height: 1.4;
+  }
+
+  .readout {
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+
+  /* The safe/marginal chip. Its colour is set at the call site, because the call site
+     is where the verdict is known. */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 0.125rem 0.5rem 0.1875rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .badge::before {
+    content: '';
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 999px;
+    background-color: currentColor;
+  }
+
+  /* Native disclosure, minus the browser's triangle. Keyboard behaviour comes free,
+     which is the reason it is a <details> and not a button with state. */
+  .disclosure > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .disclosure > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 0.75rem;
+    top: -4rem;
+    z-index: 50;
+    border-radius: 2px;
+    background-color: var(--color-brine);
+    color: var(--color-haar-lift);
+    padding: 0.5rem 0.875rem;
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    transition: top 120ms ease-out;
+  }
+
+  .skip-link:focus {
+    top: 0.75rem;
+  }
+}
+
+@layer utilities {
+  /* The one animated thing on the page: the now-marker breathing on the tide ribbon. */
+  .now-pulse::after {
+    content: '';
+    position: absolute;
+    inset: -0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-flare);
+    opacity: 0;
+    animation: sounding-pulse 2.8s ease-out infinite;
+  }
+
+  @keyframes sounding-pulse {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.35);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(1);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .now-pulse::after {
+    display: none;
+  }
+}
