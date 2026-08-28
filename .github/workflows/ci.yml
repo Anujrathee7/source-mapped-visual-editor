@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The whole suite runs without an API key: SVE_AGENT=fake is a deterministic
+# in-process editor. CI never talks to a model, so it never costs tokens and
+# never flakes on model phrasing. The live-agent suite is opt-in and local.
+env:
+  SVE_AGENT: fake
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
