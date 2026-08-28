@@ -290,7 +290,7 @@ describe('POST /__sve/revert', () => {
     );
 
     expect(response.status).toBe(200);
-    expect((await response.json()) as EditResult).toMatchObject({ status: 'landed' });
+    expect((await response.json()) as EditResult).toMatchObject({ status: 'reverted' });
     expect(Buffer.compare(readFileSync(app.file), HERO_SOURCE)).toBe(0);
 
     await app.close();
