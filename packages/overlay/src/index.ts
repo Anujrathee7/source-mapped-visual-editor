@@ -52,3 +52,38 @@ export {
 } from './store.js';
 
 export { createReasserter, type OverrideEntry, type Reasserter } from './reassert.js';
+
+export {
+  anchorFor,
+  createHighlight,
+  moveSelection,
+  resolveAnchor,
+  stampedAncestor,
+  type Anchor,
+  type Highlight,
+  type SelectionMove,
+} from './selection.js';
+
+export {
+  APPLY_LABELS,
+  CHROME_CSS,
+  CLASS_ABSENT_REASON,
+  CLASS_DYNAMIC_REASON,
+  STYLE_FIELDS,
+  TEXT_EMPTY_REASON,
+  TEXT_EXPRESSION_REASON,
+  blastRadiusMessage,
+  classFieldState,
+  createInspector,
+  styleFieldState,
+  textFieldState,
+  type ApplyPhase,
+  type ControlState,
+  type Inspector,
+  type InspectorState,
+  type Verdict,
+} from './inspector.js';
+
+export { buildIntent, describeEdit, inferKind, type IntentInput } from './intent.js';
+
+export { HOST_ATTR, mountOverlay, type MountOptions, type OverlayHandle } from './mount.js';
