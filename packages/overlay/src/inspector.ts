@@ -79,6 +79,8 @@ export const APPLY_LABELS: Readonly<Record<ApplyPhase | EditStatus, string>> = {
   drifted: 'Drifted',
   blocked: 'Blocked',
   stalled: 'Stalled',
+  // Not a shade of Landed: the snapshot was restored, so nothing landed.
+  reverted: 'Reverted',
   error: 'Error',
 };
 
