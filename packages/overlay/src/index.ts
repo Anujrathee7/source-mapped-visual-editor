@@ -29,3 +29,26 @@ export {
 } from './excerpt.js';
 
 export { captureSnapshot, readComputed } from './snapshot.js';
+
+export {
+  OVERRIDE_STYLE_ATTR,
+  buildStylesheet,
+  createOverrideStyleSheet,
+  declarationsFor,
+  declarationsForStore,
+  eidSelector,
+  propertiesDeclaredByClasses,
+  type DeclarationEntry,
+  type Declarations,
+  type OverrideStyleSheet,
+} from './apply.js';
+
+export {
+  createOverrideStore,
+  isEmptyOverride,
+  type ClassOverride,
+  type Override,
+  type OverrideStore,
+} from './store.js';
+
+export { createReasserter, type OverrideEntry, type Reasserter } from './reassert.js';
