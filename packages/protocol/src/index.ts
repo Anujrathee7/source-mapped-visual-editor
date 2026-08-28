@@ -136,7 +136,15 @@ export const ApplyRequestSchema = z.object({
 });
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
 
-export const EDIT_STATUSES = ['landed', 'drifted', 'blocked', 'stalled', 'error'] as const;
+export const EDIT_STATUSES = [
+  'landed',
+  'drifted',
+  'blocked',
+  'stalled',
+  /** A snapshot was restored. Distinct from 'landed': nothing landed, it was undone. */
+  'reverted',
+  'error',
+] as const;
 export type EditStatus = (typeof EDIT_STATUSES)[number];
 
 export const MismatchSchema = z.object({

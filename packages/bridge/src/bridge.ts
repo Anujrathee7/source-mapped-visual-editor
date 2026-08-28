@@ -190,7 +190,7 @@ export function createBridge(options: BridgeOptions): Bridge {
     async revert(jobId) {
       const result = await snapshots.revert(jobId);
       return result.ok
-        ? { jobId, status: 'landed', message: `reverted ${result.restored.length} file(s)` }
+        ? { jobId, status: 'reverted', message: `reverted ${result.restored.length} file(s)` }
         : { jobId, status: 'error', message: result.message ?? `unknown jobId: ${jobId}` };
     },
 

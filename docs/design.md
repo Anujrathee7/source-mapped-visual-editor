@@ -67,7 +67,8 @@ state change.
 
 One action verb carried through the whole flow:
 
-**Apply → Applying… → Landed / Drifted / Blocked / Stalled**
+**Apply → Applying… → Landed / Drifted / Blocked / Stalled**, plus **Reverted** when a
+snapshot is restored — never "Landed", because nothing landed.
 
 Failure states give the fact and the next move, with no apology and no vagueness:
 

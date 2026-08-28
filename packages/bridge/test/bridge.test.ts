@@ -156,7 +156,7 @@ describe('createBridge', () => {
     expect(Buffer.compare(readFileSync(file), HERO_SOURCE)).not.toBe(0);
 
     const reverted = await bridge.revert(result!.jobId);
-    expect(reverted.status).toBe('landed');
+    expect(reverted.status).toBe('reverted');
     expect(Buffer.compare(readFileSync(file), HERO_SOURCE)).toBe(0);
     bridge.close();
   });

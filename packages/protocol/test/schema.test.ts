@@ -90,7 +90,7 @@ describe('TRACKED_PROPS', () => {
 
 // AC-0.5
 describe('EditResultSchema', () => {
-  it.each(['landed', 'drifted', 'blocked', 'stalled', 'error'])('accepts %s', (status) => {
+  it.each(['landed', 'drifted', 'blocked', 'stalled', 'reverted', 'error'])('accepts %s', (status) => {
     expect(
       EditResultSchema.safeParse({ jobId: 'job_1', status, message: 'ok' }).success,
     ).toBe(true);
