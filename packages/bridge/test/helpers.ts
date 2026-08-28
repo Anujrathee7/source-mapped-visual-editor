@@ -1,8 +1,14 @@
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { EditIntent } from '@sve/protocol';
-import type { BridgeFs } from '../src/fs.js';
+import { parseLoc, type EditIntent } from '@sve/protocol';
+import type {
+  AgentContext,
+  AgentProgress,
+  AgentToolRequest,
+  ToolPermission,
+} from '../src/agent/types.js';
+import { nodeFs, type BridgeFs } from '../src/fs.js';
 
 /**
  * A source fixture that is hostile to careless IO: CRLF terminators, a trailing
@@ -103,6 +109,48 @@ export async function waitFor(
     if (Date.now() > deadline) throw new Error(`waitFor: ${message}`);
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+export interface TestAgentContext {
+  ctx: AgentContext;
+  progress: AgentProgress[];
+  requests: AgentToolRequest[];
+}
+
+/** A minimal {@link AgentContext}, so a runner can be exercised without the bridge around it. */
+export function makeAgentContext(options: {
+  root: string;
+  file: string;
+  intent?: EditIntent;
+  editRoots?: readonly string[];
+  jobId?: string;
+  fs?: BridgeFs;
+  canUseTool?: (request: AgentToolRequest) => Promise<ToolPermission>;
+}): TestAgentContext {
+  const intent = options.intent ?? makeIntent();
+  const progress: AgentProgress[] = [];
+  const requests: AgentToolRequest[] = [];
+
+  const ctx: AgentContext = {
+    jobId: options.jobId ?? 'job_test',
+    intent,
+    loc: parseLoc(intent.loc)!,
+    file: options.file,
+    root: options.root,
+    editRoots: options.editRoots ?? [options.root],
+    prompt: 'prompt withheld: this context exercises runner behaviour, not prompt text',
+    fs: options.fs ?? nodeFs,
+    signal: new AbortController().signal,
+    async canUseTool(request) {
+      requests.push(request);
+      return options.canUseTool ? options.canUseTool(request) : { behavior: 'allow' };
+    },
+    report(update) {
+      progress.push(update);
+    },
+  };
+
+  return { ctx, progress, requests };
 }
 
 /** A promise plus its resolve, for stubs that must park mid-job. */
