@@ -1,0 +1,24 @@
+{
+  "name": "@sve/source-loc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@babel/core": "^7.28.4",
+    "@babel/plugin-syntax-jsx": "^7.27.1",
+    "@babel/plugin-syntax-typescript": "^7.27.1",
+    "@babel/types": "^7.28.4",
+    "@sve/protocol": "*"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  }
+}
