@@ -39,7 +39,7 @@ export function jsxName(node: t.JSXOpeningElement['name']): string {
 function attrName(node: t.JSXAttribute['name']): string {
   return node.type === 'JSXIdentifier'
     ? node.name
-    : `${node.name.namespace.name}:${node.name.name.name}`;
+    : `${node.namespace.name}:${node.name.name}`;
 }
 
 /** Runs the plugin under test and returns the emitted code. */
