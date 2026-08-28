@@ -1,0 +1,31 @@
+export {
+  ATTR_CLASS,
+  ATTR_EID,
+  ATTR_LOC,
+  ATTR_TEXT,
+  SVE_ATTRS,
+  readClassKind,
+  readTextKind,
+  type ClassKind,
+  type TextKind,
+} from './attrs.js';
+
+export {
+  DEFAULT_ROOT_FONT_SIZE,
+  diffComputed,
+  normalizeColor,
+  normalizeLength,
+  normalizeText,
+  normalizeValue,
+  valuesEqual,
+} from './compare.js';
+
+export {
+  buildExcerpt,
+  defaultSourceUrl,
+  type Caret,
+  type Excerpt,
+  type ExcerptLine,
+} from './excerpt.js';
+
+export { captureSnapshot, readComputed } from './snapshot.js';
