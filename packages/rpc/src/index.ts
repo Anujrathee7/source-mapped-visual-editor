@@ -9,6 +9,26 @@ export {
 } from './errors.js';
 
 export {
+  WILDCARD_ORIGIN,
+  acceptsPeer,
+  createWindowTransport,
+  type MessageEventLike,
+  type MessageSource,
+  type PeerIdentity,
+  type PeerVerdict,
+  type PostTarget,
+  type Transport,
+  type TransportMessage,
+  type WindowTransportOptions,
+} from './transport.js';
+
+export {
+  createTransportPair,
+  type MemoryPeer,
+  type MemoryTransport,
+} from './memory.js';
+
+export {
   APPLY_PHASES,
   AnchorRefSchema,
   AnchorSchema,

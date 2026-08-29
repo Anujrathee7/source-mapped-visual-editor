@@ -197,6 +197,8 @@ describe('the source of this package', () => {
     expect(files.length).toBeGreaterThan(3);
   });
 
+  // Deliberately blunt: comments are scanned too. A stripper that skipped them would be
+  // one more thing to get right, and the guard is worth more than the prose it costs.
   it('contains exactly one wildcard-origin literal: the constant that exists to reject it', () => {
     const hits = lines().filter(({ text }) => /(['"])\*\1/.test(text));
     expect(hits.map(({ file, text }) => `${file}: ${text.trim()}`)).toEqual([
