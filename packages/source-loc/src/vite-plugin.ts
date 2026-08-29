@@ -59,8 +59,21 @@ export interface SourceLocViteOptions extends SourceLocOptions {
  * Sharing the listeners rather than silencing the duplicate means the report follows the
  * pass that actually ran, whichever instance performed it, and no registration is demoted
  * for having been resolved second.
+ *
+ * Kept on the *process* rather than in module scope, because the two registrations are
+ * routinely not the same module. `@sve/host` starts a project with `configLoader: 'runner'`,
+ * so the project's `vite.config.ts` is evaluated in Vite's module runner; this package is
+ * TypeScript and cannot be externalised, so the config's copy of it is a second instance
+ * with a second module scope. Both would then believe they were the first, and the whole
+ * of the sharing would be a WeakMap neither of them could see.
+ *
+ * `Symbol.for` rather than a string property: the registry is ours, and a global string
+ * key is a name somebody else can collide with.
  */
-const SHARED_LISTENERS = new WeakMap<object, Set<(report: StampReport) => void>>();
+const SHARED_KEY = Symbol.for('@sve/source-loc.shared-listeners');
+type SharedListeners = WeakMap<object, Set<(report: StampReport) => void>>;
+const globalScope = globalThis as unknown as Record<symbol, SharedListeners | undefined>;
+const SHARED_LISTENERS: SharedListeners = (globalScope[SHARED_KEY] ??= new WeakMap());
 
 export function sourceLoc(options: SourceLocViteOptions = {}): Plugin {
   let root = options.root ?? process.cwd();
