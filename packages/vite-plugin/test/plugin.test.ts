@@ -1,6 +1,7 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Plugin } from 'vite';
 import { SVE_APPLY_PATH, type ConnectHandle } from '@sve/bridge';
@@ -213,5 +214,149 @@ describe('sve() — the dev-server integration', () => {
     };
     expect(middleware.bridge.root).toBe(path.resolve(root));
     expect(middleware.bridge.editRoots).toEqual([path.resolve(root, 'src')]);
+  });
+});
+
+/* == the editor as a package the project has never heard of (AC-11.3) ====== */
+
+interface UserConfigLike {
+  server?: { fs?: { allow?: string[] } };
+  optimizeDeps?: { exclude?: string[] };
+}
+
+/** Runs a plugin's `config` hook the way vite does, and hands back what it asked for. */
+function callConfig(plugin: Plugin, userConfig: Record<string, unknown>): UserConfigLike {
+  const hook = plugin.config;
+  const run = typeof hook === 'function' ? hook : hook?.handler;
+  const result = run?.call({} as never, userConfig as never, { command: 'serve' } as never);
+  return (result ?? {}) as UserConfigLike;
+}
+
+function callResolveId(plugin: Plugin, id: string): unknown {
+  const hook = plugin.resolveId;
+  const run = typeof hook === 'function' ? hook : hook?.handler;
+  return run?.call({} as never, id, undefined, {} as never);
+}
+
+const SVE_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const PACKAGES_ROOT = path.dirname(SVE_ROOT);
+
+describe('sve() — serving a project that has never heard of @sve (AC-11.3)', () => {
+  it('resolves the client entry to an absolute path of its own', () => {
+    const editor = byName(sve({ root: makeRoot() }), 'sve:editor');
+    const resolved = callResolveId(editor, CLIENT_ENTRY_SPECIFIER);
+
+    expect(typeof resolved).toBe('string');
+    expect(path.isAbsolute(resolved as string)).toBe(true);
+    expect(existsSync(resolved as string)).toBe(true);
+    expect(resolved).toBe(path.join(SVE_ROOT, 'src', 'client', 'entry.ts'));
+  });
+
+  it('still leaves everything else to the dev server', () => {
+    const editor = byName(sve({ root: makeRoot() }), 'sve:editor');
+    expect(callResolveId(editor, '@sve/overlay')).toBeUndefined();
+    expect(callResolveId(editor, 'react')).toBeUndefined();
+  });
+
+  it('widens fs.allow to the packages the overlay is built from', () => {
+    const root = makeRoot();
+    const editor = byName(sve({ root }), 'sve:editor');
+    const allow = (callConfig(editor, { root }).server?.fs?.allow ?? []).map((entry) =>
+      path.resolve(entry),
+    );
+
+    for (const pkg of ['vite-plugin', 'overlay', 'protocol']) {
+      expect(allow).toContain(path.join(PACKAGES_ROOT, pkg));
+    }
+  });
+
+  it('keeps the default allow list rather than replacing it', () => {
+    // `server.fs.allow` defaults to `[workspaceRoot]`, and vite takes the *raw* value
+    // whenever one is present — so a plugin that returns only its own directories
+    // silently locks the project out of serving its own source.
+    const root = makeRoot();
+    const editor = byName(sve({ root }), 'sve:editor');
+    const allow = (callConfig(editor, { root }).server?.fs?.allow ?? []).map((entry) =>
+      path.resolve(entry),
+    );
+    expect(allow.some((entry) => root === entry || root.startsWith(entry + path.sep))).toBe(true);
+  });
+
+  it('adds only its own directories when the project set an allow list itself', () => {
+    // vite concatenates the two arrays, so repeating theirs back would duplicate it.
+    const root = makeRoot();
+    const editor = byName(sve({ root }), 'sve:editor');
+    const theirs = path.join(root, 'shared');
+    const allow = callConfig(editor, { root, server: { fs: { allow: [theirs] } } }).server?.fs
+      ?.allow;
+    expect(allow).not.toContain(theirs);
+    expect((allow ?? []).map((entry) => path.resolve(entry))).toContain(
+      path.join(PACKAGES_ROOT, 'overlay'),
+    );
+  });
+
+  it('keeps the overlay and everything under it out of the dependency optimizer', () => {
+    const editor = byName(sve({ root: makeRoot() }), 'sve:editor');
+    const exclude = callConfig(editor, { root: makeRoot() }).optimizeDeps?.exclude ?? [];
+    expect(exclude).toEqual(expect.arrayContaining(['@sve/vite', '@sve/overlay', '@sve/protocol']));
+  });
+});
+
+/* == what a host needs from the plugin ==================================== */
+
+describe('sve() — driven by a host rather than by a config file', () => {
+  it('takes a constructed agent instead of reading SVE_AGENT', () => {
+    const root = makeRoot();
+    const agent = {
+      name: 'host-supplied',
+      requiresNetwork: false,
+      run: async () => ({ kind: 'noop' as const }),
+    };
+    const plugins = sve({ root, agent });
+    resolveConfig(plugins, root);
+    const server = fakeServer();
+    configureAll(plugins, server);
+
+    const middleware = server.handles[0] as unknown as { bridge: { agent: { name: string } } };
+    expect(middleware.bridge.agent.name).toBe('host-supplied');
+  });
+
+  it('hands the middleware to whoever mounted it, so it can be closed explicitly', () => {
+    const root = makeRoot();
+    const seen: Array<{ close(): void }> = [];
+    const plugins = sve({ root, onMiddleware: (middleware) => seen.push(middleware) });
+    resolveConfig(plugins, root);
+    configureAll(plugins, fakeServer());
+
+    expect(seen).toHaveLength(1);
+    expect(typeof seen[0]!.close).toBe('function');
+  });
+
+  it('closes the bridge on server close even with no http server (AC-11.6)', async () => {
+    // In middleware mode `server.httpServer` is null, so the `once('close')` the plugin
+    // registers never fires and the serial queue and lifetime controller outlive the
+    // server that owned them. `buildEnd` is what vite calls on close either way.
+    const root = makeRoot();
+    const plugins = sve({ root });
+    resolveConfig(plugins, root);
+    const server = { ...fakeServer(), httpServer: null };
+    for (const plugin of plugins) {
+      const hook = plugin.configureServer;
+      const run = typeof hook === 'function' ? hook : hook?.handler;
+      run?.call({} as never, server as never);
+    }
+
+    const middleware = server.handles[0] as unknown as {
+      bridge: { progress: { subscribe(fn: () => void): () => void; listenerCount: number } };
+    };
+    middleware.bridge.progress.subscribe(() => {});
+    expect(middleware.bridge.progress.listenerCount).toBe(1);
+
+    const editor = byName(plugins, 'sve:editor');
+    const hook = editor.buildEnd;
+    const run = typeof hook === 'function' ? hook : hook?.handler;
+    await run?.call({} as never, undefined as never);
+
+    expect(middleware.bridge.progress.listenerCount).toBe(0);
   });
 });
