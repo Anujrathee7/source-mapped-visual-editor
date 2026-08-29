@@ -6,9 +6,10 @@
  * finds the file already stamped and correctly reports zero. Whichever caller's callback
  * happens to sit on the second one then believes nothing was stamped.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Plugin } from 'vite';
 import { sourceLoc, type StampReport } from '../src/index.js';
+import type { SourceLocViteOptions } from '../src/vite-plugin.js';
 
 const SOURCE = [
   'export const X = () => (',
@@ -72,6 +73,46 @@ describe('registering the editor twice', () => {
     expect(first).toEqual([{ file: 'src/X.tsx', elements: 2 }]);
     // The bug: this one used to receive `elements: 0` and report the project unstamped.
     expect(second).toEqual([{ file: 'src/X.tsx', elements: 2 }]);
+  });
+
+  /**
+   * AC-14.3, as the host actually produces it.
+   *
+   * `@sve/host` starts the project's server with `configLoader: 'runner'`, which loads the
+   * project's `vite.config.ts` in Vite's own module runner. Our packages are TypeScript,
+   * so the runner cannot externalise them: the config's `@sve/source-loc` is a *different
+   * module instance* from the host's. Two instances mean two module-scope registries, both
+   * of which think they are the first — so both stamp, the second finds every file already
+   * stamped, and the host's callback is told the project has no JSX in it.
+   *
+   * Which is AC-14's bug, arriving through a door AC-14's own fix left open: sharing keyed
+   * on a module-scope binding is not sharing at all when the module is loaded twice.
+   *
+   * Found by connecting `apps/demo` through the studio, which was refused with
+   * `no-elements-stamped` while the served module carried every attribute.
+   */
+  it('shares across module instances, which is how a host actually loads it', async () => {
+    // The host's copy, evaluated separately from the one imported at the top of this file.
+    vi.resetModules();
+    const other = (await import('../src/vite-plugin.js')) as {
+      sourceLoc(options?: SourceLocViteOptions): Plugin;
+    };
+    expect(other.sourceLoc).not.toBe(sourceLoc);
+
+    const config: StampReport[] = [];
+    const host: StampReport[] = [];
+
+    await pipeline(
+      [
+        sourceLoc({ root: '/project', onStamp: (r) => config.push(r) }),
+        other.sourceLoc({ root: '/project', onStamp: (r) => host.push(r) }),
+      ],
+      SOURCE,
+      ID,
+    );
+
+    expect(config).toEqual([{ file: 'src/X.tsx', elements: 2 }]);
+    expect(host).toEqual([{ file: 'src/X.tsx', elements: 2 }]);
   });
 
   // AC-14.4
