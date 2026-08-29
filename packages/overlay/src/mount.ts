@@ -31,6 +31,8 @@ import { buildIntent, inferKind } from './intent.js';
 import {
   createInspector,
   type ApplyPhase,
+  type Inspector,
+  type InspectorCallbacks,
   type InspectorState,
   type Verdict,
 } from './inspector.js';
@@ -64,6 +66,17 @@ export interface MountOptions {
   fetchSource?: (file: string) => Promise<string | null>;
   /** Lines of context either side of the caret. */
   contextLines?: number;
+  /**
+   * Whether to draw the inspector panel. Defaults to true (AC-15.2).
+   *
+   * `false` is for the framed case, where the studio draws the diagnostic in its own
+   * window and a second one in here would duplicate it and cover the design it is about.
+   * It is an option rather than a stylesheet on purpose: the panel is never *created*, so
+   * there is nothing a rule could reveal, and no fields to catch a keystroke meant for the
+   * page. Everything else — selection, the highlights, the override store, the injected
+   * stylesheet, the re-asserter — is the mechanism and stays exactly where it is.
+   */
+  chrome?: boolean;
 }
 
 /**
@@ -175,6 +188,7 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
   const view = doc.defaultView;
   const viteRoot = options.viteRoot ?? '';
   const contextLines = options.contextLines ?? 2;
+  const withChrome = options.chrome ?? true;
   // The injected realm's `fetch` (AC-8.1). In v2 the request has to be made from inside
   // the iframe, where the dev server is same-origin; the ambient window's `fetch` would
   // resolve the relative URL against the wrong document and be blocked besides. A realm
@@ -293,7 +307,9 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
 
   const render = (): void => {
     if (unmounted) return;
-    inspector.render(buildState());
+    // The highlights are drawn either way: they are how the *page* shows what is
+    // selected, and the studio cannot draw into this document.
+    inspector?.render(buildState());
     const el = selectedElement();
     if (el) selectedHighlight.show(el);
     else selectedHighlight.hide();
@@ -301,7 +317,7 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
 
   /* ── the inspector's controls ───────────────────────────────────────────── */
 
-  const inspector = createInspector(doc, {
+  const controls: InspectorCallbacks = {
     onText: (value) => {
       if (!selection) return;
       store.patch(selection.eid, { text: value });
@@ -345,12 +361,25 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       if (!selection) return;
       for (const handler of [...revertHandlers]) handler(selection.eid);
     },
-  });
-  layer.append(inspector.element);
+  };
+
+  /**
+   * The panel itself — or nothing at all, when the caller asked for the mechanism
+   * without the chrome (AC-15.2).
+   *
+   * `null` rather than a hidden element: `render` is the only thing that talks to it, and
+   * a panel that was merely hidden would still hold focusable fields in the page's tab
+   * order and still be one stylesheet away from covering the design.
+   */
+  const inspector: Inspector | null = withChrome ? createInspector(doc, controls) : null;
+  if (inspector) layer.append(inspector.element);
 
   /* ── source loading ─────────────────────────────────────────────────────── */
 
   const loadSource = (file: string, force = false): void => {
+    // The excerpt is the panel's only reader. With no panel the studio fetches the file
+    // in its own right (AC-15.2), and doing it here too would be two requests per click.
+    if (!withChrome) return;
     if (!force && sources.has(file)) return;
     if (force) sources.delete(file);
     void fetchSource(file).then((source) => {
