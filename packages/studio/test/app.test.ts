@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { APPLY_LABELS } from '@sve/overlay';
 import { createConnectController, type ConnectState, type ConnectTransport } from '../src/client/connect.js';
 import { Studio, type StudioProps } from '../src/app/Studio.js';
+import { browserThemeEnvironment, createThemeController } from '../src/client/theme.js';
 import { PROVIDERS } from '../src/providers.js';
 import { H1_ANCHOR, H1_EID, SOURCE, settle } from './fixture.js';
 import { createHarness, type Harness } from './harness.js';
@@ -58,6 +59,7 @@ async function render(props: Partial<StudioProps> = {}): Promise<void> {
     providers: props.providers ?? PROVIDERS.map((p) => ({ ...p, configured: false, missing: null, selected: p.id === 'fake' })),
     onSelectProvider: () => undefined,
     onConfigureProvider: () => undefined,
+    theme: props.theme ?? createThemeController(browserThemeEnvironment()),
     workspace: props.workspace ?? null,
     previewUrl: props.previewUrl ?? null,
     onReconnect: () => undefined,
@@ -153,6 +155,24 @@ describe('the three panels', () => {
     // standing in for a button.
     expect(all('div[role="button"]')).toHaveLength(0);
     expect(all('a')).toHaveLength(0);
+  });
+});
+
+/**
+ * AC-16.1 — the toggle is somewhere a person can find it in both views.
+ *
+ * Top-right of whatever is on screen: the connect card's head before a project is open,
+ * the agent panel's head after, which is the top-right corner of the workspace itself.
+ */
+describe('AC-16.1 the theme toggle', () => {
+  it('is offered on the connect view', async () => {
+    await render();
+    expect(q('.sv-connect__head .sv-theme')).not.toBeNull();
+  });
+
+  it('and in the top-right corner of the workspace', async () => {
+    await connected();
+    expect(q('[aria-label="Agent chat"] .sv-panel__head .sv-theme')).not.toBeNull();
   });
 });
 
