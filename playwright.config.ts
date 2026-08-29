@@ -4,6 +4,21 @@ import { FIXTURE_URL } from './e2e/fixture.js';
 const DEMO_URL = 'http://localhost:5173';
 
 /**
+ * Whether this run is the opt-in live-agent one (AC-6.7 / AC-5.10).
+ *
+ * It decides two things together, and they must not be decided apart: which
+ * agent the editor server runs, and which suite is pointed at it. `SVE_AGENT=fake`
+ * gets `verification.spec.ts`, whose outcomes are scripted; `SVE_AGENT=claude`
+ * gets `live.spec.ts` instead. Running both against one server would mean asking
+ * the fake suite to drive a real model, which is neither test.
+ *
+ * The live project is registered either way, so a default run reports it as
+ * skipped rather than silently not existing — the file's own `test.skip` is what
+ * skips it, and it costs nothing to see that it was there.
+ */
+const LIVE = process.env['SVE_AGENT'] === 'claude';
+
+/**
  * Two servers, because the suite asks two different questions.
  *
  * `demo` is the page on its own, with `SVE_EDITOR=off` taking the plugin back out of
@@ -30,11 +45,24 @@ export default defineConfig({
       testMatch: /demo\.smoke\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: DEMO_URL },
     },
+    // The fake-agent suite, dropped when the server is running the real one.
+    ...(LIVE
+      ? []
+      : [
+          {
+            name: 'editor',
+            testMatch: /verification\.spec\.ts/,
+            // One worker's worth of these at a time: they write to one shared fixture, and
+            // two running at once would each restore the other's file out from under it.
+            fullyParallel: false,
+            use: { ...devices['Desktop Chrome'], baseURL: FIXTURE_URL },
+          },
+        ]),
     {
-      name: 'editor',
-      testMatch: /verification\.spec\.ts/,
-      // One worker's worth of these at a time: they write to one shared fixture, and two
-      // running at once would each restore the other's file out from under it.
+      name: 'live',
+      testMatch: /live\.spec\.ts/,
+      // Same shared fixture, same reason — and a real agent takes long enough that
+      // overlapping runs would also be paying for each other's retries.
       fullyParallel: false,
       use: { ...devices['Desktop Chrome'], baseURL: FIXTURE_URL },
     },
@@ -56,7 +84,10 @@ export default defineConfig({
       url: FIXTURE_URL,
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { SVE_AGENT: 'fake' },
+      // Spelled out rather than passed through: the only two agents this server
+      // may be started with are the scripted one and the live one, and a typo in
+      // `SVE_AGENT` must not quietly select something else.
+      env: { SVE_AGENT: LIVE ? 'claude' : 'fake' },
     },
   ],
 });
