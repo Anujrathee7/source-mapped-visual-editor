@@ -21,11 +21,23 @@ These criteria are fixed. If an implementation fails one, the implementation cha
 
 Asserted on the options object handed to `query`, without calling the API:
 
-- `allowedTools` is exactly `['Read', 'Edit']`.
-- `Glob`, `Grep`, `Bash`, `Write`, `WebFetch` and `WebSearch` are absent. **`Glob` and
-  `Grep` are absent on purpose**: an agent that can search is an agent that can decide the
-  coordinate was wrong and go looking, which is the failure mode this project exists to
-  remove. A future change that adds them is a change to the premise, not a convenience.
+- **`tools` is exactly `['Read', 'Edit']`.** This is the option that decides which tools
+  exist. An earlier revision of this criterion named `allowedTools` alone, which was
+  wrong: per the SDK's own types, `allowedTools` decides which of the available tools run
+  *without a permission prompt*, and leaves the rest available. Setting only that would
+  have left `Glob` and `Grep` reachable behind a prompt while this document claimed they
+  were gone.
+- `allowedTools` is also exactly `['Read', 'Edit']`, so the two tools that exist need no
+  prompt.
+- `Glob`, `Grep`, `Bash`, `Write`, `WebFetch` and `WebSearch` appear nowhere in the options
+  object. **`Glob` and `Grep` are absent on purpose**: an agent that can search is an agent
+  that can decide the coordinate was wrong and go looking, which is the failure mode this
+  project exists to remove. A future change that adds them is a change to the premise, not
+  a convenience.
+- **`settingSources` is `[]`.** Omitting it loads every settings source, so a permission
+  rule in a developer's personal settings could silently widen the runner's reach. The
+  capability this runner holds is the one this file describes and nothing a machine happens
+  to be configured with.
 - `model` is `claude-opus-5`.
 - `cwd` is the project root, and `maxTurns` is bounded.
 
