@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HOST_ATTR, mountOverlay, type OverlayHandle } from '../src/mount.js';
 import { OVERRIDE_STYLE_ATTR } from '../src/apply.js';
-import { CARD_EID, H1_EID, H1_LOC, P_EID, fetchFixtureSource, renderPage } from './fixture.js';
+import { CARD_EID, FILE, H1_EID, H1_LOC, P_EID, fetchFixtureSource, renderPage } from './fixture.js';
 import { addPageStyle, rerenderText, resetDocument, tick } from './support.js';
 
 let handle: OverlayHandle | null = null;
@@ -55,7 +55,7 @@ describe('mounting is isolated', () => {
   it('leaks nothing into the page but eid-keyed rules', () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.store.set(H1_EID, { style: { color: 'red' } });
+    overlay.restoreOverride(H1_EID, { style: { color: 'red' } });
 
     const injected = document.querySelectorAll<HTMLStyleElement>(`style[${OVERRIDE_STYLE_ATTR}]`);
     expect(injected).toHaveLength(1);
@@ -88,7 +88,7 @@ describe('unmounting', () => {
   it('removes the host and the injected stylesheet', () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.store.set(H1_EID, { style: { color: 'red' } });
+    overlay.restoreOverride(H1_EID, { style: { color: 'red' } });
     overlay.unmount();
     handle = null;
 
@@ -99,7 +99,7 @@ describe('unmounting', () => {
   it('stops re-asserting, and restores what React last rendered', async () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.store.set(H1_EID, { text: 'Ship faster' });
+    overlay.restoreOverride(H1_EID, { text: 'Ship faster' });
     const h1 = document.querySelector('h1')!;
     expect(h1.textContent).toBe('Ship faster');
 
@@ -160,7 +160,7 @@ describe('selection', () => {
   it('deselects on Escape', () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.select(document.querySelector('h1'));
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
     expect(overlay.selection).not.toBeNull();
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -177,7 +177,7 @@ describe('selection', () => {
   it('walks the tree with the arrow keys, so a non-focusable element is still reachable', () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.select(document.querySelector('h1'));
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
     expect(overlay.selection!.tag).toBe('section');
@@ -192,7 +192,7 @@ describe('selection', () => {
   it('never selects its own chrome', () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.select(document.querySelector('h1'));
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
     const before = overlay.selection;
 
     host()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -206,7 +206,7 @@ describe('selection', () => {
     const classBefore = h1.className;
 
     h1.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
-    overlay.select(h1);
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
 
     expect(chrome().querySelectorAll('.sve-highlight').length).toBeGreaterThan(0);
     expect(h1.getAttribute('style')).toBeNull();
@@ -220,12 +220,13 @@ describe('selection', () => {
   it('survives the target being replaced', () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.select(document.querySelector('h1'));
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
 
     renderPage();
-    const fresh = document.querySelector('h1')!;
+    // A distinct loc on the replacement, so this cannot pass by reading the old node.
+    document.querySelector('h1')!.setAttribute('data-sve-loc', `${FILE}:9:5`);
     expect(overlay.selection!.eid).toBe(H1_EID);
-    expect(overlay.resolveAnchor(H1_EID, 0)).toBe(fresh);
+    expect(overlay.currentLoc(H1_EID, 0)).toBe(`${FILE}:9:5`);
   });
 });
 
@@ -235,8 +236,8 @@ describe('blast radius', () => {
     renderPage();
     addPageStyle('.card { color: rgb(14, 17, 22) }');
     const overlay = mountForTest();
-    overlay.select(document.querySelectorAll('article')[2]!);
-    overlay.store.set(CARD_EID, { style: { color: 'rgb(59, 130, 246)' } });
+    overlay.select({ eid: CARD_EID, eidIndex: 2 });
+    overlay.restoreOverride(CARD_EID, { style: { color: 'rgb(59, 130, 246)' } });
     await tick();
 
     const cards = document.querySelectorAll('article');
@@ -247,7 +248,7 @@ describe('blast radius', () => {
   it('re-asserts text on all six, not only the clicked one', () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.store.set(CARD_EID, { text: 'edited' });
+    overlay.restoreOverride(CARD_EID, { text: 'edited' });
     for (const card of document.querySelectorAll('article')) {
       expect(card.textContent).toBe('edited');
     }
@@ -261,7 +262,12 @@ describe('the hooks M6 drives', () => {
     renderPage();
     const overlay = mountForTest();
     renderPage();
-    expect(overlay.resolveAnchor(CARD_EID, 4)).toBe(document.querySelectorAll('article')[4]);
+    // Six elements share the eid, so the index has to be what picks one out: they are
+    // stamped apart here rather than compared by identity.
+    document.querySelectorAll('article').forEach((card, index) => {
+      card.setAttribute('data-sve-loc', `${FILE}:${20 + index}:9`);
+    });
+    expect(overlay.currentLoc(CARD_EID, 4)).toBe(`${FILE}:24:9`);
   });
 
   it('reads the live DOM into a snapshot', () => {
@@ -275,7 +281,7 @@ describe('the hooks M6 drives', () => {
     renderPage();
     const overlay = mountForTest();
     const h1 = document.querySelector('h1')!;
-    overlay.store.set(H1_EID, { text: 'Ship faster', style: { color: 'rgb(59, 130, 246)' } });
+    overlay.restoreOverride(H1_EID, { text: 'Ship faster', style: { color: 'rgb(59, 130, 246)' } });
     await tick();
     expect(h1.textContent).toBe('Ship faster');
     expect(getComputedStyle(h1).color).toBe('rgb(59, 130, 246)');
@@ -297,8 +303,8 @@ describe('the hooks M6 drives', () => {
     const applied = vi.fn();
     overlay.onApply(applied);
 
-    overlay.select(document.querySelector('h1'));
-    overlay.store.set(H1_EID, { text: 'Ship faster' });
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
+    overlay.restoreOverride(H1_EID, { text: 'Ship faster' });
     await tick();
 
     chrome().querySelector<HTMLButtonElement>('.sve-apply')!.click();
@@ -315,7 +321,7 @@ describe('the hooks M6 drives', () => {
   it('re-reads the DOM on demand, so a shifted loc reaches the inspector', async () => {
     renderPage();
     const overlay = mountForTest();
-    overlay.select(document.querySelector('h1'));
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
     await tick();
 
     document.querySelector('h1')!.setAttribute('data-sve-loc', 'apps/demo/src/Hero.tsx:9:5');

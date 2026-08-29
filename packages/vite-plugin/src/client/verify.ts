@@ -17,12 +17,14 @@
  * paint back and reports green every time. AC-5.2 exists to catch exactly that, and the
  * `liftOverride`-then-`readSnapshot` pairing below is the only place it is prevented.
  *
- * Nothing here touches the network or the DOM directly: the loop is handed a target and a
+ * Nothing here touches the network or the DOM at all: the loop is handed a target and a
  * transport, which is what lets it be driven by fake timers in a unit test rather than
- * only through a browser.
+ * only through a browser — and, from AC-8.2, what lets it run in a document it cannot
+ * reach. There is no DOM import and no node in this file; `watchForUpdate` below is the
+ * one realm-bound thing, and it is realm-bound on purpose, because the update it waits for
+ * is the page's own dev-server socket and the two frames are the page's own compositor.
  */
 import { diffComputed, normalizeText, type ApplyPhase, type Override, type Verdict } from '@sve/overlay';
-import { ATTR_LOC } from '@sve/overlay';
 import { parseLoc, type Computed, type EditIntent, type EditResult, type Mismatch, type Snapshot } from '@sve/protocol';
 import { DEFAULT_SETTLE_MS, DEFAULT_VERIFY_TIMEOUT_MS } from '../constants.js';
 
@@ -45,7 +47,7 @@ export const MISSING_MESSAGE = 'the element did not come back after hot reload';
  * render — and keeps it testable without a browser.
  */
 export interface LoopTarget {
-  resolveAnchor(eid: string, eidIndex: number): HTMLElement | null;
+  currentLoc(eid: string, eidIndex: number): string | null;
   readSnapshot(eid: string, eidIndex: number): Snapshot | null;
   liftOverride(eid: string): Override | undefined;
   restoreOverride(eid: string, override: Override): void;
@@ -197,8 +199,7 @@ export function compareToIntent(intent: EditIntent, rendered: Snapshot | null): 
  * AC-5.9).
  */
 export function reanchorIntent(intent: EditIntent, target: LoopTarget): EditIntent {
-  const element = target.resolveAnchor(intent.eid, intent.eidIndex);
-  const loc = element?.getAttribute(ATTR_LOC);
+  const loc = target.currentLoc(intent.eid, intent.eidIndex);
   if (!loc || loc === intent.loc || parseLoc(loc) === null) return intent;
   return { ...intent, loc };
 }
@@ -289,13 +290,14 @@ export async function runVerification(
   // 2. Re-anchor. The write moved every line below it, so the recorded loc is stale by
   //    construction and only the eid still means anything.
   target.refresh();
-  const element = target.resolveAnchor(eid, eidIndex);
+  const loc = target.currentLoc(eid, eidIndex);
 
   // 3. Lift the override. Everything below this line is only true because of it.
   const lifted = target.liftOverride(eid);
 
-  // 4. Read the live DOM — what React rendered from the file the agent wrote.
-  const rendered = element === null ? null : target.readSnapshot(eid, eidIndex);
+  // 4. Read the live DOM — what React rendered from the file the agent wrote. A null loc
+  //    is an element hot reload never brought back, and there is nothing to read.
+  const rendered = loc === null ? null : target.readSnapshot(eid, eidIndex);
 
   // 5. Compare against the recorded intent.
   const mismatch = compareToIntent(intent, rendered);

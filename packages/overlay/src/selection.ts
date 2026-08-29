@@ -18,10 +18,20 @@ import {
   type TextKind,
 } from './attrs.js';
 
-export interface Anchor {
+/**
+ * The two fields that name an element and nothing else.
+ *
+ * They are their own type because they are the only ones that survive every boundary this
+ * project has: a React re-render, hot reload, and — from AC-8.3 — a `postMessage` from a
+ * parent frame that has no access to the document at all.
+ */
+export interface AnchorRef {
   eid: string;
   /** Which of the N nodes sharing this eid this is. A mapped list shares one (AC-4.6). */
   eidIndex: number;
+}
+
+export interface Anchor extends AnchorRef {
   /** Exactly as stamped, valid only until the next write to this file. */
   loc: string;
   tag: string;

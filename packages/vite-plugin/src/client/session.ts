@@ -128,7 +128,7 @@ export function createEditorSession(options: SessionOptions): EditorSession {
     handle.onApply((intent) => {
       // Read now, not when the job runs: this is the override the user was looking at when
       // they pressed Apply, and it is what the loop compares against before dropping it.
-      const applied = handle.store.get(intent.eid);
+      const applied = handle.getOverride(intent.eid);
       void serial(async () => {
         if (disposed) return;
         const outcome = await runVerification(intent, {

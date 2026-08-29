@@ -14,6 +14,8 @@ import { createEditorSession, type BridgeTransport } from '../src/client/session
 const FILE = 'src/components/Hero.tsx';
 const H1_EID = `${FILE}#Hero/section:0/h1:0`;
 const H1_LOC = `${FILE}:3:5`;
+/** AC-8.3: a caller outside the document names an element by eid and index, not by node. */
+const H1_ANCHOR = { eid: H1_EID, eidIndex: 0 };
 
 const PAGE = `
 <main>
@@ -52,8 +54,8 @@ function setUp(transport: BridgeTransport): OverlayHandle {
 }
 
 async function applyText(overlay: OverlayHandle, text: string): Promise<void> {
-  overlay.select(document.querySelector('h1'));
-  overlay.store.set(H1_EID, { text });
+  overlay.select(H1_ANCHOR);
+  overlay.restoreOverride(H1_EID, { text });
   await tick();
   const chrome = document.querySelector('[data-sve-overlay]')!.shadowRoot!;
   chrome.querySelector<HTMLButtonElement>('.sve-apply')!.click();
@@ -135,7 +137,7 @@ describe('the editor session', () => {
     const chrome = document.querySelector('[data-sve-overlay]')!.shadowRoot!;
     const revert = (): HTMLButtonElement => chrome.querySelector<HTMLButtonElement>('.sve-revert')!;
 
-    overlay.select(document.querySelector('h1'));
+    overlay.select(H1_ANCHOR);
     await tick();
     expect(revert().hidden).toBe(true);
 
@@ -160,7 +162,7 @@ describe('the editor session', () => {
     });
 
     await applyText(overlay, 'Ship faster');
-    await vi.waitFor(() => expect(overlay.store.has(H1_EID)).toBe(false));
+    await vi.waitFor(() => expect(overlay.getOverride(H1_EID)).toBeUndefined());
 
     const chrome = document.querySelector('[data-sve-overlay]')!.shadowRoot!;
     chrome.querySelector<HTMLButtonElement>('.sve-revert')!.click();
@@ -169,7 +171,7 @@ describe('the editor session', () => {
     await vi.waitFor(() =>
       expect(chrome.querySelector('.sve-verdict')!.getAttribute('data-status')).toBe('reverted'),
     );
-    expect(overlay.store.has(H1_EID)).toBe(false);
+    expect(overlay.getOverride(H1_EID)).toBeUndefined();
     expect(document.querySelector('h1')!.textContent).toBe('Swim today');
     // Nothing left to revert to.
     expect(chrome.querySelector<HTMLButtonElement>('.sve-revert')!.hidden).toBe(true);
@@ -192,7 +194,7 @@ describe('the editor session', () => {
     await vi.waitFor(() =>
       expect(chrome.querySelector('.sve-verdict')!.getAttribute('data-status')).toBe('drifted'),
     );
-    expect(overlay.store.get(H1_EID)).toEqual({ text: 'Ship faster' });
+    expect(overlay.getOverride(H1_EID)).toEqual({ text: 'Ship faster' });
     expect(chrome.querySelector<HTMLButtonElement>('.sve-revert')!.hidden).toBe(false);
   });
 

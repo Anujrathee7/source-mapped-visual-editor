@@ -13,7 +13,7 @@
  * What is here is every hook that loop needs, in the order AC-5 lists them:
  *
  *   1. wait for `vite:afterUpdate` + two rAFs .............. M6's
- *   2. re-anchor by eid + eidIndex ......................... `resolveAnchor`
+ *   2. re-anchor by eid + eidIndex ......................... `currentLoc`
  *   3. lift the override ................................... `liftOverride`
  *   4. read the live DOM ................................... `readSnapshot`
  *   5. compare against the intent .......................... `diffComputed` (compare.ts)
@@ -25,7 +25,7 @@
  */
 import type { EditIntent, EditKind, Snapshot } from '@sve/protocol';
 import { createOverrideStyleSheet, declarationsForStore, type OverrideStyleSheet } from './apply.js';
-import { ATTR_EID } from './attrs.js';
+import { ATTR_LOC } from './attrs.js';
 import { buildExcerpt, defaultSourceUrl, type Excerpt } from './excerpt.js';
 import { buildIntent, inferKind } from './intent.js';
 import {
@@ -42,10 +42,11 @@ import {
   resolveAnchor as resolveAnchorIn,
   stampedAncestor,
   type Anchor,
+  type AnchorRef,
   type SelectionMove,
 } from './selection.js';
 import { captureSnapshot } from './snapshot.js';
-import { createOverrideStore, type Override, type OverrideStore } from './store.js';
+import { createOverrideStore, type Override } from './store.js';
 import { CHROME_CSS } from './inspector.js';
 import { normalizeText, setColorRealm } from './compare.js';
 import { parseLoc } from '@sve/protocol';
@@ -65,20 +66,39 @@ export interface MountOptions {
   contextLines?: number;
 }
 
-export interface OverlayHandle {
-  readonly store: OverrideStore;
-  readonly overrideStyleSheet: OverrideStyleSheet;
-  readonly reasserter: Reasserter;
+/**
+ * The half of the handle that can be driven from outside the document it lives in (AC-8).
+ *
+ * v2 puts the page under edit in an iframe on a different origin. The mechanism — this
+ * module and its collaborators — stays inside; the chrome moves out, and every call it
+ * makes becomes a `postMessage`. So nothing declared here may take or return a DOM node,
+ * and every value that crosses has to survive `JSON.parse(JSON.stringify(x))` unchanged.
+ * That is not a comment: `REMOTE_SURFACE` below names these members at runtime and the
+ * suite round-trips each one (AC-8.5).
+ */
+export interface RemoteOverlay {
   readonly selection: Anchor | null;
 
-  select(el: Element | null): void;
-  /** Step 2 of the loop: find the element again after HMR replaced it. */
-  resolveAnchor(eid: string, eidIndex: number): HTMLElement | null;
+  /**
+   * Programmatic selection, for a caller that knows the element only by id (AC-8.3).
+   * Clicks are handled by a listener inside the page and do not come through here.
+   */
+  select(anchor: AnchorRef | null): void;
+  /**
+   * Step 2 of the loop: where the page says this element comes from *now*.
+   *
+   * The loc, not the element. Both of this call's consumers wanted less than a node — one
+   * reads `data-sve-loc` off it, the other null-checks it — and a node is the one thing
+   * that cannot make the trip (AC-8.2).
+   */
+  currentLoc(eid: string, eidIndex: number): string | null;
   /** Step 4: read the live DOM. */
   readSnapshot(eid: string, eidIndex: number): Snapshot | null;
+  /** The one override, by eid. A copy: mutating it changes nothing here (AC-8.4). */
+  getOverride(eid: string): Override | undefined;
   /** Step 3: drop the CSS rule and stop re-asserting. Returns what was lifted. */
   liftOverride(eid: string): Override | undefined;
-  /** Step 6, drift branch: put the user's illusion back. */
+  /** Step 6, drift branch: put the user's illusion back. Also the only way to set one. */
   restoreOverride(eid: string, override: Override): void;
 
   captureIntent(kind: EditKind): EditIntent | null;
@@ -95,6 +115,46 @@ export interface OverlayHandle {
   refresh(): void;
   unmount(): void;
 }
+
+/**
+ * The remote surface plus the two live objects v1's own tests reach for.
+ *
+ * They stay for in-page mode and are deliberately not remote (AC-8.4): a stylesheet and a
+ * mutation observer are things a parent frame could hold a reference to but never use.
+ */
+export interface OverlayHandle extends RemoteOverlay {
+  readonly overrideStyleSheet: OverrideStyleSheet;
+  readonly reasserter: Reasserter;
+}
+
+/**
+ * The remote surface, enumerated so a test can walk it.
+ *
+ * The `Record<keyof RemoteOverlay, true>` is the whole point of writing it this way: a
+ * member added to the interface and not listed here does not compile, so AC-8.5's
+ * round-trip cannot quietly stop covering the surface as it grows.
+ */
+const REMOTE_MEMBERS: Record<keyof RemoteOverlay, true> = {
+  selection: true,
+  select: true,
+  currentLoc: true,
+  readSnapshot: true,
+  getOverride: true,
+  liftOverride: true,
+  restoreOverride: true,
+  captureIntent: true,
+  onApply: true,
+  onRevert: true,
+  setPhase: true,
+  setVerdict: true,
+  setRevertable: true,
+  refresh: true,
+  unmount: true,
+};
+
+export const REMOTE_SURFACE: ReadonlyArray<keyof RemoteOverlay> = Object.keys(
+  REMOTE_MEMBERS,
+) as Array<keyof RemoteOverlay>;
 
 const SOURCE_UNREADABLE = 'Source unavailable — the dev server did not return this file.';
 
@@ -302,13 +362,25 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
 
   /* ── selection ──────────────────────────────────────────────────────────── */
 
-  const select = (el: Element | null): void => {
+  /**
+   * The internal path, taken by the listeners below: a click and a focus land on a node,
+   * and the anchor is read off it.
+   */
+  const selectElement = (el: Element | null): void => {
     selection = el ? anchorFor(el, doc) : null;
     if (selection) {
       const loc = parseLoc(selection.loc);
       if (loc) loadSource(loc.file);
     }
     render();
+  };
+
+  /**
+   * The public path (AC-8.3): a caller outside this document naming an element by id.
+   * An anchor nothing answers to deselects, exactly as clicking off the page does.
+   */
+  const select = (anchor: AnchorRef | null): void => {
+    selectElement(anchor ? resolveAnchorIn(anchor.eid, anchor.eidIndex, doc) : null);
   };
 
   /* ── store subscription: one place where an override becomes a page change ── */
@@ -351,7 +423,7 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       // The page under edit stays put: a click here is a selection, not navigation.
       event.preventDefault();
       event.stopPropagation();
-      select(target);
+      selectElement(target);
     },
     true,
   );
@@ -360,12 +432,12 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
   // walk the stamped tree directly and a heading is reachable without being made tabbable.
   listen<FocusEvent>(doc, 'focusin', (event) => {
     const target = stampedAncestor(event.target as Node | null, host);
-    if (target) select(target);
+    if (target) selectElement(target);
   });
 
   listen<KeyboardEvent>(doc, 'keydown', (event) => {
     if (event.key === 'Escape') {
-      select(null);
+      selectElement(null);
       hoverHighlight.hide();
       return;
     }
@@ -376,7 +448,7 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
     const next = moveSelection(el, move);
     if (!next) return;
     event.preventDefault();
-    select(next);
+    selectElement(next);
   });
 
   const reposition = (): void => {
@@ -390,7 +462,6 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
   /* ── the handle ─────────────────────────────────────────────────────────── */
 
   const handle: OverlayHandle = {
-    store,
     overrideStyleSheet: sheet,
     reasserter,
 
@@ -400,12 +471,15 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
 
     select,
 
-    resolveAnchor: (eid, eidIndex) => resolveAnchorIn(eid, eidIndex, doc),
+    currentLoc: (eid, eidIndex) =>
+      resolveAnchorIn(eid, eidIndex, doc)?.getAttribute(ATTR_LOC) ?? null,
 
     readSnapshot: (eid, eidIndex) => {
       const el = resolveAnchorIn(eid, eidIndex, doc);
       return el ? captureSnapshot(el) : null;
     },
+
+    getOverride: (eid) => store.get(eid),
 
     liftOverride: (eid) => {
       const override = store.get(eid);

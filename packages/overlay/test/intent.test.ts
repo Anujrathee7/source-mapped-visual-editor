@@ -25,8 +25,8 @@ function overlay(): OverlayHandle {
 describe('captureIntent', () => {
   it('produces something @sve/protocol accepts, so the bridge has nothing to reject', async () => {
     const o = overlay();
-    o.select(document.querySelector('h1'));
-    o.store.set(H1_EID, { text: 'Ship faster' });
+    o.select({ eid: H1_EID, eidIndex: 0 });
+    o.restoreOverride(H1_EID, { text: 'Ship faster' });
     await tick();
 
     const intent = o.captureIntent('text')!;
@@ -37,8 +37,8 @@ describe('captureIntent', () => {
   // "The intent recorded for an edit is the snapshot taken **with the override applied**."
   it('records after as the overridden result and before as what the page had', async () => {
     const o = overlay();
-    o.select(document.querySelector('h1'));
-    o.store.set(H1_EID, { text: 'Ship faster' });
+    o.select({ eid: H1_EID, eidIndex: 0 });
+    o.restoreOverride(H1_EID, { text: 'Ship faster' });
     await tick();
 
     const intent = o.captureIntent('text')!;
@@ -51,8 +51,8 @@ describe('captureIntent', () => {
   it('records the computed result of a style override, not the declaration written', async () => {
     addPageStyle('.title { color: rgb(14, 17, 22) }');
     const o = overlay();
-    o.select(document.querySelector('h1'));
-    o.store.set(H1_EID, { style: { color: '#3b82f6' } });
+    o.select({ eid: H1_EID, eidIndex: 0 });
+    o.restoreOverride(H1_EID, { style: { color: '#3b82f6' } });
     await tick();
 
     const intent = o.captureIntent('style')!;
@@ -62,19 +62,19 @@ describe('captureIntent', () => {
 
   it('leaves the override in place afterwards — capturing is not applying', async () => {
     const o = overlay();
-    o.select(document.querySelector('h1'));
-    o.store.set(H1_EID, { text: 'Ship faster' });
+    o.select({ eid: H1_EID, eidIndex: 0 });
+    o.restoreOverride(H1_EID, { text: 'Ship faster' });
     await tick();
 
     o.captureIntent('text');
     expect(document.querySelector('h1')!.textContent).toBe('Ship faster');
-    expect(o.store.get(H1_EID)).toEqual({ text: 'Ship faster' });
+    expect(o.getOverride(H1_EID)).toEqual({ text: 'Ship faster' });
   });
 
   it('covers exactly TRACKED_PROPS on both sides', async () => {
     const o = overlay();
-    o.select(document.querySelector('h1'));
-    o.store.set(H1_EID, { text: 'Ship faster' });
+    o.select({ eid: H1_EID, eidIndex: 0 });
+    o.restoreOverride(H1_EID, { text: 'Ship faster' });
     await tick();
 
     const intent = o.captureIntent('text')!;
@@ -84,8 +84,8 @@ describe('captureIntent', () => {
 
   it('carries the index of the instance that was selected, not just the eid', async () => {
     const o = overlay();
-    o.select(document.querySelectorAll('article')[4]!);
-    o.store.set(CARD_EID, { text: 'edited' });
+    o.select({ eid: CARD_EID, eidIndex: 4 });
+    o.restoreOverride(CARD_EID, { text: 'edited' });
     await tick();
 
     expect(o.captureIntent('text')!).toMatchObject({ eid: CARD_EID, eidIndex: 4 });
@@ -94,7 +94,7 @@ describe('captureIntent', () => {
   it('returns null with nothing selected, or with nothing overridden', async () => {
     const o = overlay();
     expect(o.captureIntent('text')).toBeNull();
-    o.select(document.querySelector('h1'));
+    o.select({ eid: H1_EID, eidIndex: 0 });
     await tick();
     expect(o.captureIntent('text')).toBeNull();
   });
@@ -162,8 +162,8 @@ describe('the Apply button is the end of this milestone', () => {
     const seen: unknown[] = [];
     o.onApply((intent) => seen.push(intent));
 
-    o.select(document.querySelector('h1'));
-    o.store.set(H1_EID, { text: 'Ship faster' });
+    o.select({ eid: H1_EID, eidIndex: 0 });
+    o.restoreOverride(H1_EID, { text: 'Ship faster' });
     await tick();
 
     const chrome = document.querySelector(`[${HOST_ATTR}]`)!.shadowRoot!;
@@ -177,7 +177,7 @@ describe('the Apply button is the end of this milestone', () => {
     const o = overlay();
     const seen: unknown[] = [];
     o.onApply((intent) => seen.push(intent));
-    o.select(document.querySelector('h1'));
+    o.select({ eid: H1_EID, eidIndex: 0 });
     await tick();
 
     const chrome = document.querySelector(`[${HOST_ATTR}]`)!.shadowRoot!;

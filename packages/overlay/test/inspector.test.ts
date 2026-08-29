@@ -11,7 +11,15 @@ import {
   textFieldState,
 } from '../src/inspector.js';
 import { HOST_ATTR, mountOverlay, type OverlayHandle } from '../src/mount.js';
-import { CARD_EID, H1_EID, H1_LOC, P_EID, fetchFixtureSource, renderPage } from './fixture.js';
+import {
+  CARD_EID,
+  H1_EID,
+  H1_LOC,
+  P_EID,
+  SECTION_EID,
+  fetchFixtureSource,
+  renderPage,
+} from './fixture.js';
 import { resetDocument, tick } from './support.js';
 
 let handle: OverlayHandle | null = null;
@@ -22,10 +30,27 @@ afterEach(() => {
   resetDocument();
 });
 
+/**
+ * The fixture's elements as the anchors AC-8.3's `select` takes: an eid and an index, the
+ * only two things a caller outside the document could know.
+ */
+const ANCHORS: Record<string, { eid: string; eidIndex: number }> = {
+  h1: { eid: H1_EID, eidIndex: 0 },
+  p: { eid: P_EID, eidIndex: 0 },
+  article: { eid: CARD_EID, eidIndex: 0 },
+  section: { eid: SECTION_EID, eidIndex: 0 },
+};
+
+const anchorFor = (selector: string): { eid: string; eidIndex: number } => {
+  const anchor = ANCHORS[selector];
+  if (!anchor) throw new Error(`no anchor for ${selector}`);
+  return anchor;
+};
+
 async function selectFixture(selector: string): Promise<ShadowRoot> {
   renderPage();
   handle = mountOverlay({ fetchSource: fetchFixtureSource });
-  handle!.select(document.querySelector(selector));
+  handle!.select(anchorFor(selector));
   await tick();
   return document.querySelector(`[${HOST_ATTR}]`)!.shadowRoot!;
 }
@@ -60,7 +85,7 @@ describe('blastRadiusMessage', () => {
     );
     expect((chrome.querySelector('.sve-blast') as HTMLElement).hidden).toBe(false);
 
-    handle!.select(document.querySelector('h1'));
+    handle!.select(anchorFor('h1'));
     await tick();
     chrome = document.querySelector(`[${HOST_ATTR}]`)!.shadowRoot!;
     expect((chrome.querySelector('.sve-blast') as HTMLElement).hidden).toBe(true);
@@ -135,7 +160,7 @@ describe('disabled controls state their reason', () => {
     const text = chrome.querySelector<HTMLInputElement>('[data-sve-field="text"]')!;
     text.value = 'not allowed';
     text.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(handle!.store.size).toBe(0);
+    expect(handle!.getOverride(P_EID)).toBeUndefined();
   });
 });
 
@@ -178,7 +203,7 @@ describe('the inspector renders a real diagnostic', () => {
 
   it('moves the caret when a different element is selected', async () => {
     const chrome = await selectFixture('h1');
-    handle!.select(document.querySelector('p'));
+    handle!.select(anchorFor('p'));
     await tick();
 
     const target = chrome.querySelector('.sve-excerpt__line[data-target]')!;
@@ -190,7 +215,7 @@ describe('the inspector renders a real diagnostic', () => {
   it('says so rather than rendering a wrong excerpt when the source cannot be read', async () => {
     renderPage();
     handle = mountOverlay({ fetchSource: async () => null });
-    handle!.select(document.querySelector('h1'));
+    handle!.select(anchorFor('h1'));
     await tick();
 
     const chrome = document.querySelector(`[${HOST_ATTR}]`)!.shadowRoot!;
@@ -317,11 +342,11 @@ describe('the copy carries one verb through the flow', () => {
     await tick();
     expect((chrome.querySelector('.sve-verdict') as HTMLElement).hidden).toBe(false);
 
-    handle!.select(document.querySelector('article'));
+    handle!.select(anchorFor('article'));
     await tick();
     expect((chrome.querySelector('.sve-verdict') as HTMLElement).hidden).toBe(true);
 
-    handle!.select(document.querySelector('h1'));
+    handle!.select(anchorFor('h1'));
     await tick();
     expect((chrome.querySelector('.sve-verdict') as HTMLElement).hidden).toBe(false);
     expect(CARD_EID).not.toBe(H1_EID);
@@ -336,7 +361,7 @@ describe('editing writes overrides', () => {
     input.value = 'Ship faster';
     input.dispatchEvent(new Event('input', { bubbles: true }));
 
-    expect(handle!.store.get(H1_EID)).toEqual({ text: 'Ship faster' });
+    expect(handle!.getOverride(H1_EID)).toEqual({ text: 'Ship faster' });
     expect(document.querySelector('h1')!.textContent).toBe('Ship faster');
   });
 
@@ -346,7 +371,7 @@ describe('editing writes overrides', () => {
     color.value = '#3b82f6';
     color.dispatchEvent(new Event('input', { bubbles: true }));
 
-    expect(handle!.store.get(P_EID)?.style).toEqual({ color: '#3b82f6' });
+    expect(handle!.getOverride(P_EID)?.style).toEqual({ color: '#3b82f6' });
   });
 
   it('splits a class edit into what was added and what was removed', async () => {
@@ -356,10 +381,10 @@ describe('editing writes overrides', () => {
 
     input.value = 'title text-6xl';
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(handle!.store.get(H1_EID)).toEqual({ classes: { add: ['text-6xl'], remove: [] } });
+    expect(handle!.getOverride(H1_EID)).toEqual({ classes: { add: ['text-6xl'], remove: [] } });
 
     input.value = 'text-6xl';
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(handle!.store.get(H1_EID)).toEqual({ classes: { add: ['text-6xl'], remove: ['title'] } });
+    expect(handle!.getOverride(H1_EID)).toEqual({ classes: { add: ['text-6xl'], remove: ['title'] } });
   });
 });

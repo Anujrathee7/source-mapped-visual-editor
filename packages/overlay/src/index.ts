@@ -61,6 +61,7 @@ export {
   resolveAnchor,
   stampedAncestor,
   type Anchor,
+  type AnchorRef,
   type Highlight,
   type SelectionMove,
 } from './selection.js';
@@ -87,4 +88,11 @@ export {
 
 export { buildIntent, describeEdit, inferKind, type IntentInput } from './intent.js';
 
-export { HOST_ATTR, mountOverlay, type MountOptions, type OverlayHandle } from './mount.js';
+export {
+  HOST_ATTR,
+  REMOTE_SURFACE,
+  mountOverlay,
+  type MountOptions,
+  type OverlayHandle,
+  type RemoteOverlay,
+} from './mount.js';
