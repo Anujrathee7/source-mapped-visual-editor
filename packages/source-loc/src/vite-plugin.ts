@@ -48,8 +48,39 @@ export interface SourceLocViteOptions extends SourceLocOptions {
  * written; `apply: 'serve'` keeps every stamp out of a production build, where there is
  * no editor to consume them.
  */
+/**
+ * Every `sve:source-loc` registration sharing one resolved config, keyed by that config.
+ *
+ * A project that already registers `sve()` and is then opened by a host that injects one
+ * ends up with two instances. Only the first stamps — the second finds the file already
+ * stamped and correctly reports zero — so a caller whose callback happens to sit on the
+ * second one concludes the project is not being stamped at all (AC-14).
+ *
+ * Sharing the listeners rather than silencing the duplicate means the report follows the
+ * pass that actually ran, whichever instance performed it, and no registration is demoted
+ * for having been resolved second.
+ */
+const SHARED_LISTENERS = new WeakMap<object, Set<(report: StampReport) => void>>();
+
 export function sourceLoc(options: SourceLocViteOptions = {}): Plugin {
   let root = options.root ?? process.cwd();
+  /** Set once the config resolves; until then this instance reports only to its own caller. */
+  let listeners: Set<(report: StampReport) => void> | null = null;
+  /**
+   * False for a second registration against the same config. The duplicate stays
+   * silent rather than announcing the zero its own idempotent pass would find — a
+   * report of nothing stamped, arriving after the report of everything stamped, is
+   * exactly the false negative AC-14 is about.
+   */
+  let active = true;
+
+  const announce = (report: StampReport): void => {
+    if (listeners === null) {
+      options.onStamp?.(report);
+      return;
+    }
+    for (const listener of listeners) listener(report);
+  };
 
   return {
     name: 'sve:source-loc',
@@ -59,15 +90,27 @@ export function sourceLoc(options: SourceLocViteOptions = {}): Plugin {
     configResolved(config) {
       // An explicit root wins; otherwise follow the dev server's.
       if (options.root === undefined) root = config.root;
+
+      let shared = SHARED_LISTENERS.get(config);
+      if (shared === undefined) {
+        shared = new Set();
+        SHARED_LISTENERS.set(config, shared);
+      } else {
+        // Someone got here first; it does the stamping and reports for all of us.
+        active = false;
+      }
+      if (options.onStamp !== undefined) shared.add(options.onStamp);
+      listeners = shared;
     },
 
     transform(code, id) {
+      if (!active) return null;
       const file = (id.split('?', 1)[0] ?? id).replace(/\\/g, '/');
       if (!JSX_EXTENSION.test(file)) return null;
       if (IN_NODE_MODULES.test(file)) return null;
 
       const report = (elements: number): null => {
-        options.onStamp?.({ file: toProjectPath(file, root), elements });
+        announce({ file: toProjectPath(file, root), elements });
         return null;
       };
 
@@ -99,7 +142,7 @@ export function sourceLoc(options: SourceLocViteOptions = {}): Plugin {
       // null rather than a gratuitous map.
       if (stamped === 0) return report(0);
 
-      options.onStamp?.({ file: toProjectPath(file, root), elements: stamped });
+      announce({ file: toProjectPath(file, root), elements: stamped });
       return { code: result.code, map: result.map };
     },
   };
