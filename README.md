@@ -2,55 +2,36 @@
 
 A dev-time visual editor for React that **writes no source of its own**.
 
-You click an element, change its text or its colour, and see the change immediately — but
-that change is an illusion, a DOM override the editor is painting over the page. The only
-thing that touches disk is a headless coding agent. When it finishes, hot reload
-re-renders from the real file, the editor **lifts the override**, and compares what React
-actually rendered against what you asked for.
+You click an element and change it. That change is an illusion — a DOM override painted
+over the page. The only thing that touches disk is a headless coding agent. When it
+finishes, hot reload re-renders from the real file, the editor **lifts the override**, and
+compares what React actually rendered against what you asked for.
 
 Matching is the proof the edit landed. Not matching is a caught failure.
 
-```
-click ──> DOM override (instant, local)
-             │
-             ├── capture intent as RESOLVED values — text, computed CSS
-             │
-             ├── agent is TOLD the element at Hero.tsx:17:11 and edits it
-             │
-             └── HMR ──> lift the override ──> read the DOM ──> compare
-                            │
-                   match = landed  ·  mismatch = drifted, shown, never swallowed
-```
+![The editor open on the demo page, with an element selected](docs/images/selected.png)
 
-## Why it is built this way
+## The inspector is a compiler diagnostic
 
-**The editor writes no source of its own.** Visual editors usually become a second source
-of truth that drifts from the codebase. Here every change is first a temporary override
-and then a real, reviewable diff written by an agent — there is no third representation
-to fall out of sync.
+Every JSX host element is stamped by a Babel pass with the `file:line:col` it came from, so
+the agent is *told* which element to edit rather than asked to find it. The panel shows
+that coordinate, the real source around it, and a caret under the exact column.
 
-**Every element knows where it came from.** A Babel pass stamps each JSX host element with
-its `file:line:col`, so the agent is *told* which element to edit rather than asked to find
-it. It is given `Read` and `Edit` and nothing else — deliberately **no `Glob`, no `Grep`**.
-Searching is where agent edits usually go wrong, and this removes the step entirely.
+<img src="docs/images/inspector.png" width="420" alt="The inspector: file path and line:col, a source excerpt on a paper strip, and a blue caret under the exact column">
 
-**Hot reload is the test.** The comparison happens on *computed* values, not source text,
-so `bg-blue-500` and `style={{ background: '#3b82f6' }}` both verify — the agent is free to
-express the change however the surrounding code does.
+The agent gets `Read` and `Edit` and nothing else — deliberately **no `Glob`, no `Grep`**.
+Searching is where agent edits usually go wrong, so the step is removed entirely.
 
-## Two ids, because they answer different questions
+## Hot reload is the test
 
-Each element carries both:
+The comparison is on *computed* values, not source text, so `bg-blue-500` and
+`style={{ background: '#3b82f6' }}` both verify — the agent is free to express the change
+however the surrounding code does.
 
-| | |
-|---|---|
-| `data-sve-loc` | `apps/demo/src/Hero.tsx:17:11` — exact, and **invalid the moment the agent writes**, because every line below the edit shifts |
-| `data-sve-eid` | `…Hero.tsx#section:0/div:0/h1:0` — structural, survives that shift, and is how the overlay finds the element again after HMR |
+When the agent writes something else, you are told, and the override stays so your intent
+is not silently lost:
 
-Elements are indexed nth-of-type, so adding an unrelated sibling does not renumber the
-others. Components take a path slot even though they are not stamped — otherwise
-`<div><A><span/></A><B><span/></B></div>` would produce two identical ids, and a colliding
-id silently re-anchors an edit onto the wrong element.
+<img src="docs/images/drifted.png" width="420" alt="A drifted verdict: the file changed, but the result is not what you asked for — intent 'Ship faster', rendered 'Ship Faster'">
 
 ## Quick start
 
@@ -59,9 +40,8 @@ npm install
 npm run dev          # demo + editor at :5173 — click anything
 ```
 
-The demo app imports nothing from the editor. `sve()` is registered in
-`apps/demo/vite.config.ts` as build configuration; the page itself never learns the editor
-exists. `SVE_EDITOR=off` takes it back out.
+The page under edit imports nothing from the editor. `sve()` is build configuration; the
+app never learns the editor exists.
 
 ```ts
 // apps/demo/vite.config.ts
@@ -72,32 +52,24 @@ export default defineConfig({
 });
 ```
 
-## Layout
+## Two ids, because they answer different questions
 
-```
-packages/protocol/     zod wire contract shared by browser and node
-packages/source-loc/   babel plugin + vite plugin — origin stamping
-packages/overlay/      selection, override store, inspector, comparators
-packages/bridge/       serial queue, byte-exact snapshots, path guard, agent runners
-packages/vite-plugin/  joins all four into one dev server
-apps/demo/             the React page under edit; also the E2E fixture
-docs/acceptance/       acceptance criteria, written BEFORE implementation
-```
+| | |
+|---|---|
+| `data-sve-loc` | `src/components/Hero.tsx:17:11` — exact, and **invalid the moment the agent writes**, because every line below the edit shifts |
+| `data-sve-eid` | `…Hero.tsx#section:0/div:0/h1:0` — structural, survives that shift, and is how the overlay finds the element again after hot reload |
 
 ## Testing
 
 ```bash
 npm test          # unit
 npm run e2e       # end-to-end, SVE_AGENT=fake
-npm run typecheck
 npm run e2e:live  # opt-in, real agent, costs tokens
 ```
 
 **The whole suite runs without an API key.** `SVE_AGENT=fake` is a deterministic in-process
 editor, and it can be told to write the *wrong* thing on demand — which is the only reason
-the green path means anything.
-
-That is what `AC-5.2` is for. Break the lift step so the DOM is read while the override is
+the green path means anything. Break the lift step so the DOM is read while the override is
 still painted, and the suite reports:
 
 ```
@@ -108,12 +80,19 @@ still painted, and the suite reports:
 **AC-5.1 passes with the verifier broken.** A verifier that always reports green sails
 through the happy path; only the deliberately-wrong write tells the two apart.
 
-## Acceptance criteria come first
+## Layout
 
-`docs/acceptance/*.md` is the contract, written before the code and fixed afterwards. When
-a test fails, the code changes — never the criterion, and never the test to match the bug.
-The history reads red → green: the criteria commit, then the failing spec, then the
-implementation that turns it green.
+```
+packages/protocol/     zod wire contract shared by browser and node
+packages/source-loc/   babel plugin + vite plugin — origin stamping
+packages/overlay/      selection, override store, inspector, comparators
+packages/bridge/       serial queue, byte-exact snapshots, path guard, agent runners
+packages/vite-plugin/  joins all four into one dev server
+apps/demo/             the React page under edit; also the E2E fixture
+```
+
+`docs/acceptance/*.md` holds the acceptance criteria, written before the code and fixed
+afterwards. When a test fails the code changes — never the criterion.
 
 ## Scope
 
