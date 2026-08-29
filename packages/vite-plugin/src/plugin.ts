@@ -131,6 +131,42 @@ export interface ClientConfig {
  * dev server that will not start instead of a preview that silently never connects — and
  * so the wildcard never reaches a page at all.
  */
+
+/**
+ * The studio origin contributed by any `sve()` sharing one resolved config.
+ *
+ * A project that already registers `sve()` and is then opened by the studio ends up with
+ * two instances, and Vite concatenates config-file plugins before inline ones — so the one
+ * that answers `load` is the project's own, which was never told about a studio. Its page
+ * would then boot with no origin and serve nobody, and the preview would render but refuse
+ * to be driven.
+ *
+ * Keyed on `Symbol.for` and `globalThis` rather than module scope for the reason AC-14
+ * found: the host loads the project's config with `configLoader: 'runner'`, which cannot
+ * externalise a TypeScript package, so the two instances are two *modules* and a
+ * module-level map is not shared between them.
+ */
+const STUDIO_ORIGINS = Symbol.for('sve.vite.studioOrigins');
+
+type OriginSlot = WeakMap<object, string>;
+
+function originSlot(): OriginSlot {
+  const carrier = globalThis as unknown as Record<symbol, OriginSlot | undefined>;
+  const existing = carrier[STUDIO_ORIGINS];
+  if (existing !== undefined) return existing;
+  const created: OriginSlot = new WeakMap();
+  carrier[STUDIO_ORIGINS] = created;
+  return created;
+}
+
+function contributeStudioOrigin(config: object, origin: string): void {
+  originSlot().set(config, origin);
+}
+
+function sharedStudioOrigin(config: object | null): string | undefined {
+  return config === null ? undefined : originSlot().get(config);
+}
+
 function assertStudioOrigin(studioOrigin: string | undefined): void {
   if (studioOrigin === undefined) return;
   if (studioOrigin === WILDCARD_ORIGIN) {
@@ -164,13 +200,21 @@ function assertStudioOrigin(studioOrigin: string | undefined): void {
 function editorPlugin(options: SveOptions): Plugin {
   let root = options.root === undefined ? process.cwd() : path.resolve(options.root);
   let middleware: BridgeMiddleware | null = null;
+  let resolved: object | null = null;
 
-  const clientConfig = (): ClientConfig => ({
-    viteRoot: options.viteRoot ?? '',
-    verifyTimeoutMs: options.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS,
-    settleMs: options.settleMs ?? DEFAULT_SETTLE_MS,
-    ...(options.studioOrigin === undefined ? {} : { studioOrigin: options.studioOrigin }),
-  });
+  const clientConfig = (): ClientConfig => {
+    // Whichever instance answers `load` emits the config, and with two registrations that
+    // is the project's own — which knows nothing about a studio. So the origin is read
+    // from the shared slot rather than from this closure: a host that opened the project
+    // contributed it, and the page needs it whoever happens to be speaking.
+    const origin = options.studioOrigin ?? sharedStudioOrigin(resolved);
+    return {
+      viteRoot: options.viteRoot ?? '',
+      verifyTimeoutMs: options.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS,
+      settleMs: options.settleMs ?? DEFAULT_SETTLE_MS,
+      ...(origin === undefined ? {} : { studioOrigin: origin }),
+    };
+  };
 
   return {
     name: 'sve:editor',
@@ -207,6 +251,9 @@ function editorPlugin(options: SveOptions): Plugin {
       // An explicit root wins; otherwise follow the dev server's, so the loc the Babel
       // pass writes and the path the bridge resolves are the same string.
       if (options.root === undefined) root = config.root;
+
+      resolved = config;
+      if (options.studioOrigin !== undefined) contributeStudioOrigin(config, options.studioOrigin);
     },
 
     configureServer(server) {

@@ -51,6 +51,15 @@ export interface HostOptions {
    * session's agent depended on nothing the caller said.
    */
   createAgent: (context: AgentContextForSession) => AgentRunner;
+  /**
+   * The studio's own origin, handed to every session it opens (AC-15.3).
+   *
+   * A function rather than a string because a dev server does not know its own URL until
+   * it listens, and the host is constructed before that. Resolved per session, and the
+   * answer must come from that server — never from a value a browser supplied, which
+   * would let the first page to frame a project drive its filesystem.
+   */
+  studioOrigin?: () => string | undefined;
   /** Asked before anything from a cloned repository is executed. Absent means no. */
   confirm?: HostConfirm;
   git?: GitRunner;
@@ -201,6 +210,7 @@ export function createHost(options: HostOptions): Host {
       await mkdir(cacheDir, { recursive: true });
 
       try {
+        const studioOrigin = options.studioOrigin?.();
         const session = await startSession({
           id,
           root: detected.root,
@@ -213,6 +223,7 @@ export function createHost(options: HostOptions): Host {
           agent: options.createAgent({ sessionId: id, root: detected.root, source: acquired.source }),
           cacheDir,
           port: nextPort++,
+          ...(studioOrigin === undefined ? {} : { studioOrigin }),
           ...(options.probe === undefined ? {} : { probe: options.probe }),
         });
         // Wrapped so that closing the session a caller holds is the same event as closing

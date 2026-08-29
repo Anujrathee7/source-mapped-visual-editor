@@ -23,8 +23,21 @@ import { createStudioService } from './src/host/service.js';
 const workspaceDir =
   process.env['SVE_STUDIO_WORKSPACE'] ?? mkdtempSync(path.join(tmpdir(), 'sve-studio-'));
 
+/**
+ * The knot: the service needs the studio's origin, and the origin is only knowable from
+ * the plugin's server — which is built around the service. Tied with a closure rather than
+ * a stored string, because `strictPort: false` means the port here is a request and the
+ * answer is not known until the server listens.
+ */
+let studio: ReturnType<typeof sveStudio> | null = null;
+const service = createStudioService({
+  workspaceDir,
+  studioOrigin: () => studio?.origin(),
+});
+studio = sveStudio(service);
+
 export default defineConfig({
-  plugins: [react(), sveStudio(createStudioService({ workspaceDir }))],
+  plugins: [react(), studio],
   // Clear of 5173/5174 (the demo and the E2E fixture) and of 5310 upward, where the host
   // starts looking for ports of its own.
   server: { port: 5300, strictPort: false },

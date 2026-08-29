@@ -114,6 +114,14 @@ export interface StartSessionOptions {
   agent: AgentRunner;
   cacheDir: string;
   port: number;
+  /**
+   * The studio's own origin, so the page can serve it the preview wire (AC-15.3).
+   *
+   * Comes from the studio's server and never from anything a browser said: inference here
+   * would let the first page to frame a project drive its filesystem. Absent means the
+   * project serves nobody, which is what a host with no studio in front of it wants.
+   */
+  studioOrigin?: string;
   /** Skips the load that makes AC-11.4's silence detectable. Tests only. */
   probe?: boolean;
   probeLimit?: number;
@@ -153,6 +161,7 @@ export async function startSession(options: StartSessionOptions): Promise<HostSe
         root,
         editRoots,
         agent: options.agent,
+        ...(options.studioOrigin === undefined ? {} : { studioOrigin: options.studioOrigin }),
         onMiddleware: (mounted) => {
           middleware = mounted;
         },

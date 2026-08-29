@@ -58,6 +58,14 @@ export interface PendingConfirmation {
 
 export interface StudioServiceOptions {
   workspaceDir: string;
+  /**
+   * The studio's own origin, for the preview wire it opens into every project (AC-15.3).
+   *
+   * A function because the dev server does not know its URL until it listens, and this
+   * service is built while the config is still being read. `sveStudio` fills it in from
+   * `server.resolvedUrls`; nothing a browser sends may reach it.
+   */
+  studioOrigin?: () => string | undefined;
   /** Injected so this can be driven without starting a dev server. */
   createHost?: (options: HostOptions) => Host;
   git?: GitRunner;
@@ -179,6 +187,7 @@ export function createStudioService(options: StudioServiceOptions): StudioServic
     workspaceDir: options.workspaceDir,
     createAgent: () => providers.runner(),
     confirm,
+    ...(options.studioOrigin === undefined ? {} : { studioOrigin: options.studioOrigin }),
     ...(options.git === undefined ? {} : { git: options.git }),
     ...(options.runCommand === undefined
       ? {}

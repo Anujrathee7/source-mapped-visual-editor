@@ -206,12 +206,33 @@ export function createStudioMiddleware(service: StudioService): StudioMiddleware
 
 export interface ViteServerLike {
   middlewares: { use(handle: Handle): unknown };
+  /** Populated by Vite once the server is listening. */
+  resolvedUrls?: { local?: readonly string[]; network?: readonly string[] } | null;
+}
+
+/**
+ * The origin this server is answering on.
+ *
+ * Read from Vite rather than assembled from config: `strictPort: false` means the port a
+ * config asked for is not necessarily the port in use, and a studio that announced the
+ * wrong origin would have every project refuse its messages.
+ */
+export function originOf(server: ViteServerLike): string | undefined {
+  const local = server.resolvedUrls?.local?.[0];
+  if (local === undefined) return undefined;
+  try {
+    return new URL(local).origin;
+  } catch {
+    return undefined;
+  }
 }
 
 export interface StudioPluginLike {
   name: string;
   apply: 'serve';
   configureServer(server: ViteServerLike): void;
+  /** Where `studioOrigin` comes from — the server itself, never a browser. */
+  origin(): string | undefined;
 }
 
 /**
@@ -220,11 +241,16 @@ export interface StudioPluginLike {
  * connected projects get servers of their own from `@sve/host`.
  */
 export function sveStudio(service: StudioService): StudioPluginLike {
+  let listening: ViteServerLike | null = null;
   return {
     name: 'sve:studio',
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use(createStudioMiddleware(service));
+      // Held by reference: `resolvedUrls` is null until the server listens, which is after
+      // this hook runs, so the answer has to be read at the moment a session needs it.
+      listening = server;
     },
+    origin: () => (listening === null ? undefined : originOf(listening)),
   };
 }
