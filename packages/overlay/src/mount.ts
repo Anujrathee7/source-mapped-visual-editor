@@ -47,7 +47,7 @@ import {
 import { captureSnapshot } from './snapshot.js';
 import { createOverrideStore, type Override, type OverrideStore } from './store.js';
 import { CHROME_CSS } from './inspector.js';
-import { normalizeText } from './compare.js';
+import { normalizeText, setColorRealm } from './compare.js';
 import { parseLoc } from '@sve/protocol';
 
 /** Marks the overlay's host element in the page's document. */
@@ -115,11 +115,16 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
   const view = doc.defaultView;
   const viteRoot = options.viteRoot ?? '';
   const contextLines = options.contextLines ?? 2;
+  // The injected realm's `fetch` (AC-8.1). In v2 the request has to be made from inside
+  // the iframe, where the dev server is same-origin; the ambient window's `fetch` would
+  // resolve the relative URL against the wrong document and be blocked besides. A realm
+  // that has no `fetch` of its own — a bare jsdom window — falls back to the ambient one.
+  const realmFetch = view?.fetch?.bind(view) ?? fetch;
   const fetchSource =
     options.fetchSource ??
     (async (file: string) => {
       try {
-        const response = await fetch(defaultSourceUrl(file, viteRoot));
+        const response = await realmFetch(defaultSourceUrl(file, viteRoot));
         return response.ok ? await response.text() : null;
       } catch {
         return null;
@@ -143,6 +148,8 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
   const store = createOverrideStore();
   const sheet = createOverrideStyleSheet(doc);
   const reasserter = createReasserter(doc);
+  // The comparators stay pure by taking their one realm-bound need from here instead.
+  setColorRealm(doc);
 
   const hoverHighlight = createHighlight(layer, 'hover');
   const selectedHighlight = createHighlight(layer, 'selected');
@@ -494,6 +501,7 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       // before the host it was drawn beside.
       reasserter.dispose();
       sheet.dispose();
+      setColorRealm(undefined);
       host.remove();
     },
   };

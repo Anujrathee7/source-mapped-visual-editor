@@ -232,12 +232,32 @@ function parseFunctional(input: string): Rgba | null {
 /** Only consulted after the pure path gives up, and only where a document exists. */
 const browserCache = new Map<string, string>();
 
+/**
+ * The one impure corner of this file: the document the colour fallback borrows a canvas
+ * from (AC-8.1).
+ *
+ * It is set once by `mountOverlay` rather than threaded through `normalizeValue`, and that
+ * is deliberate. A document parameter on a comparator would have to be passed by every
+ * call site, including `runVerification` — which AC-8.2 requires to touch no DOM at all.
+ * Keeping the comparators' signatures pure is worth one module-scoped binding.
+ */
+let colorRealm: Document | undefined;
+
+export function setColorRealm(doc: Document | undefined): void {
+  if (doc === colorRealm) return;
+  colorRealm = doc;
+  // Colours resolve against a realm, so a cache filled by the previous one is not evidence
+  // about this one.
+  browserCache.clear();
+}
+
 function browserFallback(input: string): string | null {
-  if (typeof document === 'undefined') return null;
+  const realm = colorRealm ?? (typeof document === 'undefined' ? undefined : document);
+  if (!realm) return null;
   const cached = browserCache.get(input);
   if (cached !== undefined) return cached;
   try {
-    const context = document.createElement('canvas').getContext('2d');
+    const context = realm.createElement('canvas').getContext('2d');
     if (!context) return null;
     // A canvas silently keeps its previous fillStyle for a value it cannot parse, so seed
     // it with a sentinel and treat "unchanged" as "not a colour".

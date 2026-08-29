@@ -24,12 +24,19 @@ const KEBAB_PROPS: ReadonlyArray<readonly [TrackedProp, string]> = TRACKED_PROPS
  * A property the engine leaves blank is recorded as `''` rather than dropped, so the key
  * set is a constant. `diffComputed` only compares what the intent actually recorded, so a
  * blank costs nothing and a stable shape is worth more than a sparse one.
+ *
+ * The style engine is the element's own, not the ambient one (AC-8.1). Every verdict this
+ * project reaches is read through this call, so it is the one that cannot be subtly wrong:
+ * in v2 the element lives in an iframe on another origin, and a `getComputedStyle` closed
+ * over the module's evaluation realm would either throw or — worse — quietly resolve
+ * against the wrong cascade. A document with no window renders nothing and so computes
+ * nothing; every property reads blank, which is the honest answer rather than a crash.
  */
 export function readComputed(el: Element): Computed {
-  const style = getComputedStyle(el);
+  const style = el.ownerDocument.defaultView?.getComputedStyle(el) ?? null;
   const computed: Partial<Record<TrackedProp, string>> = {};
   for (const [prop, property] of KEBAB_PROPS) {
-    computed[prop] = style.getPropertyValue(property) ?? '';
+    computed[prop] = style?.getPropertyValue(property) ?? '';
   }
   return computed as Computed;
 }

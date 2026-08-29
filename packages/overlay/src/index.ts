@@ -17,6 +17,7 @@ export {
   normalizeLength,
   normalizeText,
   normalizeValue,
+  setColorRealm,
   valuesEqual,
 } from './compare.js';
 

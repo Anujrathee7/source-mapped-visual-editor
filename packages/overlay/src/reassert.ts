@@ -41,6 +41,11 @@ export interface Reasserter {
 }
 
 export function createReasserter(root: Document): Reasserter {
+  // The observed document's own constructor (AC-8.1). Observing one realm's nodes with
+  // another realm's observer is the kind of mixed-realm call that works in jsdom and fails
+  // across an iframe boundary — and a document with no window has no event loop to deliver
+  // records on, so there the observer is honestly absent rather than faked.
+  const Observer = root.defaultView?.MutationObserver;
   const baselines = new Map<Element, Baseline>();
   let entries: readonly OverrideEntry[] = [];
   let isReasserting = false;
@@ -77,15 +82,17 @@ export function createReasserter(root: Document): Reasserter {
     }
   };
 
-  const observer = new MutationObserver((records) => {
-    observations += 1;
-    if (isReasserting || disposed) return;
-    refreshBaselines(records);
-    assert();
-  });
+  const observer = Observer
+    ? new Observer((records) => {
+        observations += 1;
+        if (isReasserting || disposed) return;
+        refreshBaselines(records);
+        assert();
+      })
+    : null;
 
   const connect = (): void => {
-    if (active || disposed) return;
+    if (active || disposed || !observer) return;
     observer.observe(root.documentElement, {
       subtree: true,
       childList: true,
@@ -98,7 +105,7 @@ export function createReasserter(root: Document): Reasserter {
 
   const disconnect = (): void => {
     if (!active) return;
-    observer.disconnect();
+    observer?.disconnect();
     active = false;
   };
 
@@ -113,7 +120,7 @@ export function createReasserter(root: Document): Reasserter {
     try {
       mutate();
     } finally {
-      observer.takeRecords();
+      observer?.takeRecords();
       isReasserting = false;
     }
   };
