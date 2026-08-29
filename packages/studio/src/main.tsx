@@ -12,6 +12,7 @@ import { createRoot } from 'react-dom/client';
 import { createStudioApi } from './client/api.js';
 import { createConnectController, type ConnectState } from './client/connect.js';
 import { openSession } from './client/link.js';
+import { browserThemeEnvironment, createThemeController } from './client/theme.js';
 import type { Workspace } from './client/workspace.js';
 import type { ProviderId, ProviderSettings, ProviderView } from './providers.js';
 import type { SessionSummary } from './session.js';
@@ -78,6 +79,7 @@ function App(): React.ReactElement {
       }
       workspace={workspace}
       previewUrl={session?.url ?? null}
+      theme={THEME}
       frameRef={attach}
       // Reassigning `src` rather than reaching for `contentWindow.location`: the frame is
       // on the session's origin, and touching its `location` from here throws.
@@ -92,6 +94,12 @@ function App(): React.ReactElement {
 const style = document.createElement('style');
 style.textContent = STUDIO_CSS;
 document.head.append(style);
+
+/*
+ * Before the first render, not inside it: constructing the controller stamps `data-theme`
+ * on the root, and doing that in an effect would paint one frame of the wrong palette.
+ */
+const THEME = createThemeController(browserThemeEnvironment());
 
 const root = document.getElementById('root');
 if (root) {

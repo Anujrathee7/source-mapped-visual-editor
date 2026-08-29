@@ -12,11 +12,15 @@
  */
 import { useState, type FormEvent, type ReactElement } from 'react';
 import type { ChatTurn } from '../client/chat.js';
+import type { ThemeController } from '../client/theme.js';
 import { APPLY_LABELS } from '../client/verdicts.js';
+import { ThemeToggle } from './ThemeToggle.js';
 
 export interface ChatPanelProps {
   turns: ChatTurn[];
   busy: boolean;
+  /** The workspace's top-right corner is this panel's head, so the toggle lives here. */
+  theme: ThemeController;
   onSend(message: string): void;
   onAccept(turnId: string): void;
   onDiscard(turnId: string): void;
@@ -80,6 +84,7 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
     <section className="sv-panel sv-chat" aria-label="Agent chat">
       <header className="sv-panel__head">
         <span>Agent</span>
+        <ThemeToggle theme={props.theme} />
       </header>
 
       <div className="sv-panel__body">

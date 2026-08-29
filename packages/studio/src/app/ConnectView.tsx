@@ -12,7 +12,9 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
 import type { ConnectController, ConnectState } from '../client/connect.js';
 import type { ProviderId, ProviderSettings, ProviderView } from '../providers.js';
+import type { ThemeController } from '../client/theme.js';
 import { ProviderPicker } from './ProviderPicker.js';
+import { ThemeToggle } from './ThemeToggle.js';
 
 export interface ConnectViewProps {
   state: ConnectState;
@@ -20,6 +22,7 @@ export interface ConnectViewProps {
   providers: ProviderView[];
   onSelectProvider(id: ProviderId): void;
   onConfigureProvider(id: ProviderId, settings: ProviderSettings): void;
+  theme: ThemeController;
 }
 
 const PHASE_WORDS: Record<string, string> = {
@@ -52,6 +55,7 @@ export function ConnectView(props: ConnectViewProps): ReactElement {
       <div className="sv-connect__card">
         <div className="sv-connect__head">
           <h1 className="sv-connect__title">Source-mapped visual editor</h1>
+          <ThemeToggle theme={props.theme} />
         </div>
         <p className="sv-connect__lede">
           Open a Vite + React project. Nothing is written to it by connecting, and nothing is

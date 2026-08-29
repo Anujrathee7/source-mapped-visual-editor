@@ -14,6 +14,7 @@ import { useMemo, type ReactElement } from 'react';
 import type { EditStatus } from '@sve/protocol';
 import type { ProviderId, ProviderSettings, ProviderView } from '../providers.js';
 import type { ConnectController, ConnectState } from '../client/connect.js';
+import type { ThemeController } from '../client/theme.js';
 import type { Workspace } from '../client/workspace.js';
 import { setClasses, setStyle, setText } from '../client/edits.js';
 import { ChangesPanel } from './ChangesPanel.js';
@@ -33,6 +34,8 @@ export interface StudioProps {
   /** Present once a session is serving and the preview has something to show. */
   workspace: Workspace | null;
   previewUrl: string | null;
+  /** Which palette is in force. Chrome, so it is offered from both views. */
+  theme: ThemeController;
   frameRef?: (frame: HTMLIFrameElement | null) => void;
   onReconnect(): void;
 }
@@ -51,6 +54,7 @@ export function Studio(props: StudioProps): ReactElement {
         providers={props.providers}
         onSelectProvider={props.onSelectProvider}
         onConfigureProvider={props.onConfigureProvider}
+        theme={props.theme}
       />
     );
   }
@@ -108,6 +112,7 @@ export function Studio(props: StudioProps): ReactElement {
       <ChatPanel
         turns={workspace.chat.turns()}
         busy={busy}
+        theme={props.theme}
         onSend={(message) => void workspace.chat.send(message)}
         onAccept={(id) => void workspace.chat.accept(id)}
         onDiscard={(id) => void workspace.chat.discard(id)}
