@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { FIXTURE_URL } from './e2e/fixture.js';
 import { STUDIO_PORT, STUDIO_URL, STUDIO_WORKSPACE } from './e2e/studio.fixture.js';
+import { V2_STUDIO_PORT, V2_STUDIO_URL, V2_WORKSPACE } from './e2e/v2.fixture.js';
 
 const DEMO_URL = 'http://localhost:5173';
 
@@ -72,6 +73,24 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'], baseURL: STUDIO_URL },
           },
         ]),
+    // AC-13. The v2 end-to-end suite: the same studio mechanism as `studio`, asked the
+    // question v2 exists to answer — that a chat-authored edit is verified exactly as a
+    // clicked one is. Its own project, its own studio and its own copy of the demo,
+    // because Playwright runs projects in parallel and these two suites both write files.
+    //
+    // `fullyParallel: false` for that reason, and for one more: AC-13.8 requires *both*
+    // halves of AC-13.5 to report when the lift step is broken, so the file must run in
+    // order without being a serial group that skips what follows a failure.
+    ...(LIVE
+      ? []
+      : [
+          {
+            name: 'v2',
+            testMatch: /v2\.spec\.ts/,
+            fullyParallel: false,
+            use: { ...devices['Desktop Chrome'], baseURL: V2_STUDIO_URL },
+          },
+        ]),
     {
       name: 'live',
       testMatch: /live\.spec\.ts/,
@@ -117,6 +136,16 @@ export default defineConfig({
         // something behind leaves it somewhere a person can look.
         SVE_STUDIO_WORKSPACE: STUDIO_WORKSPACE,
       },
+    },
+    {
+      // AC-13's studio. A second one rather than a shared one: the two studio suites each
+      // connect a project of their own, and one host answering both while Playwright runs
+      // the projects in parallel would interleave two connects that are one at a time.
+      command: `npm run dev -w @sve/studio -- --port ${V2_STUDIO_PORT} --strictPort`,
+      url: V2_STUDIO_URL,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: { SVE_AGENT: 'fake', SVE_STUDIO_WORKSPACE: V2_WORKSPACE },
     },
   ],
 });
