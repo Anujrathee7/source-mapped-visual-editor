@@ -13,7 +13,7 @@
  * host injects another — which is the shape any real connected project has.
  */
 import path from 'node:path';
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { REPO_ROOT, copyDemoTo } from './fixture.js';
 
 /** Clear of 5173 (the demo), 5174 (the verification fixture) and 5310+ (the host's). */
@@ -58,4 +58,14 @@ export default defineConfig({
 export function prepareStudioFixture(): void {
   copyDemoTo(STUDIO_FIXTURE_ROOT);
   writeFileSync(path.join(STUDIO_FIXTURE_ROOT, 'vite.config.ts'), CONFIG, 'utf8');
+
+  // The host writes one dependency cache per session, and a suite that never cleared them
+  // would grow a directory nobody looks at. Swallowed rather than asserted: a previous
+  // run's server may still hold a handle on Windows, and a stale cache is a slow start,
+  // not a wrong answer.
+  try {
+    rmSync(STUDIO_WORKSPACE, { recursive: true, force: true });
+  } catch {
+    /* it will be reused, which is only a cost */
+  }
 }
