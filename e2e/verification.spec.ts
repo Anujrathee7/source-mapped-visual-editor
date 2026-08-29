@@ -11,6 +11,8 @@ import {
 } from './fixture.js';
 import {
   apply,
+  caret,
+  excerpt,
   armFake,
   applyButton,
   blastRadius,
@@ -403,4 +405,31 @@ test('the editor is injected by the dev server, not wired in by the app', async 
   await expect(panel(page)).toBeHidden();
   await select(page, page.locator('h1'));
   await expect(panel(page)).toBeVisible();
+});
+
+/* ── the excerpt is source, not the transformed module ────────────────────── */
+
+/**
+ * AC-4.8 asks for "a source excerpt". The dev server's own module graph cannot supply one:
+ * requesting the module returns JSX already lowered to a props object, carrying the very
+ * data-sve-* attributes the editor added, and a caret under column 11 of *that* points at
+ * nothing a developer ever wrote. Regressing to the module URL would still render a
+ * plausible-looking strip of code, which is exactly why this is asserted.
+ */
+test('the excerpt shows the file as written, not the transformed module', async ({
+  page,
+}) => {
+  await select(page, heroH1(page));
+
+  const shown = (await excerpt(page).textContent()) ?? '';
+
+  // What the source says at the target.
+  expect(shown).toContain('<h1');
+  // What the transformed module would have said instead.
+  expect(shown).not.toContain('data-sve-loc');
+  expect(shown).not.toContain('jsxDEV');
+  expect(shown).not.toContain('createElement');
+
+  // The caret is present and sits under a real column.
+  await expect(caret(page).first()).toBeVisible();
 });

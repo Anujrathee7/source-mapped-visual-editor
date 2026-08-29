@@ -17,6 +17,7 @@ export {
   SVE_APPLY_PATH,
   SVE_BASE_PATH,
   SVE_EVENTS_PATH,
+  SVE_SOURCE_PATH,
   SVE_REVERT_PATH,
   type BridgeMiddleware,
   type BridgeMiddlewareOptions,

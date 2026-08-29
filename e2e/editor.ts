@@ -115,3 +115,7 @@ export async function apply(page: Page, status: string, timeout = 30_000): Promi
   await applyButton(page).click();
   await expect(verdict(page)).toHaveAttribute('data-status', status, { timeout });
 }
+
+/** The source excerpt on the `paper` strip, and the caret under the column. */
+export const excerpt = (page: Page): Locator => page.locator('.sve-excerpt');
+export const caret = (page: Page): Locator => page.locator('.sve-caret');

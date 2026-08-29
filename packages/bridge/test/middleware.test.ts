@@ -9,6 +9,7 @@ import { nodeFs } from '../src/fs.js';
 import {
   createBridgeMiddleware,
   SVE_APPLY_PATH,
+  SVE_SOURCE_PATH,
   SVE_EVENTS_PATH,
   SVE_REVERT_PATH,
   type BridgeMiddleware,
@@ -319,6 +320,72 @@ describe('POST /__sve/revert', () => {
     expect(response.status).toBe(400);
     expect(app.fsSpy.calls).toEqual([]);
 
+    await app.close();
+  });
+});
+
+/* ── GET /__sve/source ────────────────────────────────────────────────────── */
+
+/**
+ * The inspector's excerpt has to be the developer's source, not Vite's transformed
+ * module. Asking the dev server for `/src/components/Hero.tsx` returns compiled output —
+ * `"data-sve-loc": "..."` inside a props object — and a caret pointing at column 11 of
+ * that is pointing at nothing. So the bridge, which already reads these files from disk to
+ * build prompts, serves the raw bytes instead.
+ */
+describe('GET /__sve/source', () => {
+  it('returns the file as written on disk', async () => {
+    const app = await harness();
+    const onDisk = readFileSync(app.file, 'utf8');
+
+    const response = await fetch(
+      `${app.base}${SVE_SOURCE_PATH}?file=${encodeURIComponent('src/Hero.tsx')}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/plain');
+    const body = await response.text();
+    expect(body).toBe(onDisk);
+    // The giveaway that this is source and not a transformed module.
+    expect(body).not.toContain('data-sve-loc');
+
+    await app.close();
+  });
+
+  it('refuses a path outside editRoots, and reads nothing', async () => {
+    const app = await harness();
+    app.fsSpy.reset();
+
+    const response = await fetch(
+      `${app.base}${SVE_SOURCE_PATH}?file=${encodeURIComponent('../../../etc/passwd')}`,
+    );
+
+    expect(response.status).toBe(403);
+    expect(app.fsSpy.calls.filter((call) => call.startsWith('readFile'))).toEqual([]);
+
+    await app.close();
+  });
+
+  it('rejects a missing file parameter with 400', async () => {
+    const app = await harness();
+    const response = await fetch(`${app.base}${SVE_SOURCE_PATH}`);
+    expect(response.status).toBe(400);
+    await app.close();
+  });
+
+  it('reports an absent file as 404 rather than a server error', async () => {
+    const app = await harness();
+    const response = await fetch(
+      `${app.base}${SVE_SOURCE_PATH}?file=${encodeURIComponent('src/Nope.tsx')}`,
+    );
+    expect(response.status).toBe(404);
+    await app.close();
+  });
+
+  it('rejects a non-GET with 405', async () => {
+    const app = await harness();
+    const response = await post(app.base, `${SVE_SOURCE_PATH}?file=src/Hero.tsx`, '{}');
+    expect(response.status).toBe(405);
     await app.close();
   });
 });

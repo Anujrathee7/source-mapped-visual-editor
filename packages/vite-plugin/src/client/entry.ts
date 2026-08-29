@@ -9,6 +9,9 @@ import { mountOverlay, type OverlayHandle } from '@sve/overlay';
 import { createEditorSession, type EditorSession } from './session.js';
 import type { HotLike } from './verify.js';
 
+/** Mirrors `SVE_SOURCE_PATH` in `@sve/bridge`, which is Node-only and cannot be imported here. */
+const SOURCE_PATH = '/__sve/source';
+
 export interface BootOptions {
   /** Vite's root as the loc spells it, so the overlay can fetch a source excerpt. */
   viteRoot?: string;
@@ -33,7 +36,22 @@ export function boot(options: BootOptions = {}): void {
     session?.dispose();
     overlay?.unmount();
 
-    overlay = mountOverlay({ viteRoot: options.viteRoot ?? '' });
+    overlay = mountOverlay({
+      viteRoot: options.viteRoot ?? '',
+      // The excerpt comes from the bridge, not from Vite's module graph. Asking the dev
+      // server for the module returns the *transformed* source — JSX already lowered to a
+      // props object carrying the data-sve-* attributes this editor added — and a caret at
+      // column 11 of that points at nothing anyone wrote. The bridge serves the bytes on
+      // disk, behind the same path guard as every write.
+      fetchSource: async (file: string) => {
+        try {
+          const response = await fetch(`${SOURCE_PATH}?file=${encodeURIComponent(file)}`);
+          return response.ok ? await response.text() : null;
+        } catch {
+          return null;
+        }
+      },
+    });
     if (!overlay) return;
 
     session = createEditorSession({

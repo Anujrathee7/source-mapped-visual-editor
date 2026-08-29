@@ -1,11 +1,15 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ApplyRequestSchema, RevertRequestSchema } from '@sve/protocol';
+import path from 'node:path';
 import { createBridge, type Bridge, type BridgeOptions } from './bridge.js';
+import { nodeFs } from './fs.js';
+import { isInsideEditRoots } from './guard.js';
 
 export const SVE_BASE_PATH = '/__sve/';
 export const SVE_APPLY_PATH = '/__sve/apply';
 export const SVE_EVENTS_PATH = '/__sve/events';
 export const SVE_REVERT_PATH = '/__sve/revert';
+export const SVE_SOURCE_PATH = '/__sve/source';
 
 /** 1 MiB. `ApplyRequestSchema` caps at 50 intents; this caps the bytes before parsing. */
 export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
@@ -71,6 +75,7 @@ async function readBody(
 export function createBridgeMiddleware(options: BridgeMiddlewareOptions): BridgeMiddleware {
   const bridge = options.bridge ?? createBridge(options);
   const limit = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+  const fs = options.fs ?? nodeFs;
 
   function methodNotAllowed(res: ServerResponse, allow: string): void {
     res.setHeader('allow', allow);
@@ -168,6 +173,49 @@ export function createBridgeMiddleware(options: BridgeMiddlewareOptions): Bridge
     send('retry: 1000\n\n');
   }
 
+
+  /**
+   * The inspector's source excerpt (AC-4.8).
+   *
+   * It cannot come from the dev server's own module graph: asking Vite for
+   * `/src/components/Hero.tsx` returns the *transformed* module, where the JSX has become
+   * a props object carrying the very `data-sve-*` attributes this pass added, and a caret
+   * at column 11 of that points at nothing a developer wrote. The bridge already reads
+   * these files from disk to build prompts, so it serves the bytes instead.
+   *
+   * Read-only, and behind the same guard as every write: the excerpt is shown in a browser
+   * and must not become a way to read arbitrary files off the machine.
+   */
+  async function handleSource(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const query = (req.url ?? '').split('?')[1] ?? '';
+    const file = new URLSearchParams(query).get('file');
+    if (file === null || file === '') {
+      return sendJson(res, 400, { error: 'missing_file', message: 'expected ?file=<path>' });
+    }
+
+    const absolute = path.resolve(bridge.root, file);
+    if (!(await isInsideEditRoots(absolute, bridge.editRoots, fs))) {
+      return sendJson(res, 403, {
+        error: 'outside_edit_roots',
+        message: `${file} is outside the configured editRoots`,
+      });
+    }
+
+    let contents: Buffer;
+    try {
+      contents = await fs.readFile(absolute);
+    } catch {
+      return sendJson(res, 404, { error: 'not_found', message: `${file} does not exist` });
+    }
+
+    res.writeHead(200, {
+      'content-type': 'text/plain; charset=utf-8',
+      'content-length': String(contents.byteLength),
+      'cache-control': 'no-store',
+    });
+    res.end(contents);
+  }
+
   const handle: ConnectHandle = (req, res, next) => {
     const pathname = (req.url ?? '').split('?')[0] ?? '';
     if (!pathname.startsWith(SVE_BASE_PATH)) return next();
@@ -192,6 +240,11 @@ export function createBridgeMiddleware(options: BridgeMiddlewareOptions): Bridge
       case SVE_REVERT_PATH:
         if (req.method !== 'POST') return methodNotAllowed(res, 'POST');
         void handleRevert(req, res).catch(fail);
+        return;
+
+      case SVE_SOURCE_PATH:
+        if (req.method !== 'GET') return methodNotAllowed(res, 'GET');
+        void handleSource(req, res).catch(fail);
         return;
 
       case SVE_EVENTS_PATH:
