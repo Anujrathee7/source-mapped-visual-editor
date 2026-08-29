@@ -1,11 +1,12 @@
 import path from 'node:path';
-import type {
-  Options as SdkOptions,
-  PermissionResult,
-  query as sdkQuery,
-} from '@anthropic-ai/claude-agent-sdk';
 import { pathOf, refusalIn, systemPromptWith, WRITING_TOOLS } from './shared.js';
-import { blocked, type AgentContext, type AgentOutcome, type AgentRunner } from './types.js';
+import {
+  blocked,
+  type AgentContext,
+  type AgentOutcome,
+  type AgentRunner,
+  type ToolPermission,
+} from './types.js';
 
 /* ── the seam ─────────────────────────────────────────────────────────────── */
 
@@ -33,18 +34,51 @@ export interface AgentStreamMessage {
 }
 
 /**
+ * The slice of the SDK's `Options` this runner sets, mirrored locally (AC-10.2).
+ *
+ * Written out here rather than imported, because a type-only import is still a
+ * static import: it is resolved by the compiler, and one of them in `src/` makes
+ * the SDK mandatory for everybody — including the person whose project only ever
+ * talks to a local model.
+ *
+ * A hand-written mirror normally rots. This one cannot, quietly: the seam
+ * assertion in `test/agent-optional-sdk.test.ts` requires the SDK's real `query`
+ * to remain assignable to {@link SdkQuery}, which requires this interface to
+ * remain assignable to the SDK's `Options`. A field renamed or retyped upstream
+ * fails the build — in the tree where the SDK is installed, which is the only
+ * tree where the question can be asked.
+ */
+export interface ClaudeSdkOptions {
+  abortController?: AbortController;
+  allowedTools?: string[];
+  /**
+   * The third parameter is `unknown` on purpose: this runner never reads the
+   * SDK's call metadata, and naming it would be a second thing to keep in step.
+   */
+  canUseTool?: (
+    tool: string,
+    input: Record<string, unknown>,
+    meta: unknown,
+  ) => Promise<ToolPermission>;
+  cwd?: string;
+  maxTurns?: number;
+  model?: string;
+  permissionMode?: 'default';
+  resume?: string;
+  settingSources?: ('user' | 'project' | 'local')[];
+  systemPrompt?: string;
+  tools?: string[];
+}
+
+/**
  * `query`, as this runner needs it. Injected so the unit suite can drive a
  * scripted stream and assert the options object without a request leaving the
  * process (AC-6.6). The real function is imported lazily, inside `run`.
  */
 export type SdkQuery = (params: {
   prompt: string;
-  options?: SdkOptions;
+  options?: ClaudeSdkOptions;
 }) => AsyncIterable<AgentStreamMessage>;
-
-/** Fails to compile if the installed SDK's `query` stops fitting the seam. */
-type Assert<_T extends SdkQuery> = true;
-export type _QuerySeamHolds = Assert<typeof sdkQuery>;
 
 /* ── the shape of the capability ──────────────────────────────────────────── */
 
@@ -139,9 +173,34 @@ export interface ClaudeAgentOptions {
   maxTurns?: number;
 }
 
+/**
+ * Held as a variable so the compiler cannot follow it (AC-10.2).
+ *
+ * A literal specifier — even inside `await import(...)` — is resolved at compile
+ * time, so a missing optional peer would be a type error for every install
+ * rather than a runtime error on the one path that actually needs the package.
+ */
+const SDK_MODULE = '@anthropic-ai/claude-agent-sdk';
+
+/**
+ * Loaded lazily, on the first `SVE_AGENT=claude` job and never before.
+ *
+ * The failure is named here rather than left as a bare resolution error, for
+ * the same reason a missing credential is: someone reaching this line asked for
+ * this provider, and the answer they need is which package to install.
+ */
 async function loadQuery(): Promise<SdkQuery> {
-  const sdk = await import('@anthropic-ai/claude-agent-sdk');
-  return sdk.query;
+  try {
+    const sdk = (await import(SDK_MODULE)) as { query: SdkQuery };
+    return sdk.query;
+  } catch (cause) {
+    throw new Error(
+      `SVE_AGENT=claude needs ${SDK_MODULE}, which is an optional peer dependency ` +
+        `and is not installed. Run \`npm install ${SDK_MODULE}\`, or select a ` +
+        'provider that does not need it.',
+      { cause },
+    );
+  }
 }
 
 /**
@@ -183,7 +242,7 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentRunner
       const replies: string[] = [];
       const written = new Set<string>();
 
-      const sdkOptions: SdkOptions = {
+      const sdkOptions: ClaudeSdkOptions = {
         model,
         // Both, and for different reasons: `tools` is what decides which tools
         // exist at all, `allowedTools` is what decides which run without a
@@ -201,7 +260,7 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentRunner
         abortController: controller,
         ...(ctx.retry?.sessionId ? { resume: ctx.retry.sessionId } : {}),
 
-        async canUseTool(tool, input): Promise<PermissionResult> {
+        async canUseTool(tool, input): Promise<ToolPermission> {
           const decision = await ctx.canUseTool({
             tool,
             ...(pathOf(input) !== undefined ? { path: pathOf(input)! } : {}),

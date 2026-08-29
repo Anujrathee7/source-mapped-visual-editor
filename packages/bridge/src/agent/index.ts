@@ -22,6 +22,7 @@ export {
   CLAUDE_TOOLS,
   type AgentStreamMessage,
   type ClaudeAgentOptions,
+  type ClaudeSdkOptions,
   type SdkQuery,
 } from './claude.js';
 

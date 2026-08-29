@@ -73,6 +73,7 @@ export {
   type AgentStreamMessage,
   type AgentToolRequest,
   type ClaudeAgentOptions,
+  type ClaudeSdkOptions,
   type FakeAgentOptions,
   type FakeMode,
   type SdkQuery,
