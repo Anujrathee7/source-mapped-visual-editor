@@ -52,6 +52,15 @@ docs/acceptance/      acceptance criteria, written BEFORE implementation
   compiler diagnostic (`paper` excerpt strip, blue caret under the exact column); the demo
   app is a cold coastal palette. Keep the two visually unmistakable.
 
+## Working in a git worktree
+
+Run `npm install` in the worktree before running anything. A fresh worktree has an empty
+`node_modules`, and Node then resolves `@sve/*` **up the directory tree to the main
+checkout** — so tests import the other tree's sources, a green run says nothing about the
+code you just changed, and a break in a sibling package goes unnoticed.
+
+Check with `ls node_modules/@sve`. If the links are missing, `npm install` creates them.
+
 ## Commands
 
 ```bash
