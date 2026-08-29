@@ -1,18 +1,18 @@
 /**
  * The browser entry: build the controllers, hand them to React, and get out of the way.
  *
- * The one piece of real wiring is the preview link. `connectPreview` has to exist before
- * the iframe's document announces itself — a `ready` posted at a window nobody is
- * listening on is a handshake nobody completes — so the client is built the moment the
- * session's URL is known and the frame is given a `src` afterwards.
+ * There is no wiring left in here. The one piece there was — joining a serving session to
+ * a preview it cannot reach into — is `openSession`, in a module with no React in it,
+ * because the order it has to do things in is behaviour and behaviour has to be assertable
+ * in Node. This file decides *when*: the moment the session's URL is known, and never at
+ * the frame, which does not exist yet and must not have to.
  */
 import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createWindowTransport } from '@sve/rpc';
 import { createStudioApi } from './client/api.js';
 import { createConnectController, type ConnectState } from './client/connect.js';
-import { connectPreview } from './client/preview.js';
-import { createWorkspace, type Workspace } from './client/workspace.js';
+import { openSession } from './client/link.js';
+import type { Workspace } from './client/workspace.js';
 import type { ProviderId, ProviderSettings, ProviderView } from './providers.js';
 import type { SessionSummary } from './session.js';
 import { Studio } from './app/Studio.js';
@@ -39,37 +39,33 @@ function App(): React.ReactElement {
   }, [state]);
 
   /**
-   * The frame arrived. Its origin is the session's, named rather than inferred, and the
-   * transport listens on this window for messages carrying that origin and that source.
+   * The session is serving, so the wire opens — before there is a frame, which is the only
+   * order that works. `openSession` holds the whole of why.
    */
-  const attach = useCallback(
-    (element: HTMLIFrameElement | null) => {
-      frame.current = element;
-      if (!element || !session) return;
-      const peer = element.contentWindow;
-      if (!peer) return;
+  useEffect(() => {
+    if (!session) return undefined;
 
-      const link = connectPreview({
-        transport: createWindowTransport({
-          target: peer,
-          targetOrigin: new URL(session.url).origin,
-          listenOn: window,
-        }),
-        peerOrigin: new URL(session.url).origin,
-        peerSource: peer,
-      });
+    const link = openSession({
+      sessionId: session.id,
+      sessionUrl: session.url,
+      frame: () => frame.current,
+      listenOn: window,
+      apply: (id, intent) => api.apply(id, intent),
+      revert: (id, jobId) => api.revert(id, jobId),
+      plan: (request) => api.plan(request),
+    });
+    setWorkspace(link.workspace);
 
-      setWorkspace(
-        createWorkspace({
-          preview: link.controller,
-          apply: (intent) => api.apply(session.id, intent),
-          revert: (jobId) => api.revert(session.id, jobId),
-          planner: { name: 'host', plan: (request) => api.plan(request) },
-        }),
-      );
-    },
-    [api, session],
-  );
+    return () => {
+      setWorkspace(null);
+      link.dispose();
+    };
+  }, [api, session]);
+
+  /** The frame arrived, or left. Nothing else: the wire was opened before it existed. */
+  const attach = useCallback((element: HTMLIFrameElement | null) => {
+    frame.current = element;
+  }, []);
 
   return (
     <Studio
@@ -83,7 +79,12 @@ function App(): React.ReactElement {
       workspace={workspace}
       previewUrl={session?.url ?? null}
       frameRef={attach}
-      onReconnect={() => frame.current?.contentWindow?.location.reload()}
+      // Reassigning `src` rather than reaching for `contentWindow.location`: the frame is
+      // on the session's origin, and touching its `location` from here throws.
+      onReconnect={() => {
+        const element = frame.current;
+        if (element) element.src = element.src;
+      }}
     />
   );
 }
