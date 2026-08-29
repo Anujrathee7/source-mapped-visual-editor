@@ -131,7 +131,7 @@ export function Diagnostic(props: DiagnosticProps): ReactElement {
         </div>
 
         {STYLE_FIELDS.map(([prop, label]) => (
-          <div className="sv-field" key={prop}>
+          <div className="sv-field sv-field--short" key={prop}>
             <label className="sv-field__label" htmlFor={`sv-style-${prop}`}>
               {label}
             </label>

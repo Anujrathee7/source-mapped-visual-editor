@@ -429,16 +429,23 @@ body {
   border-top: 1px solid var(--sv-line);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  /*
+   * A floor so it never collapses, and a ceiling so a long excerpt or a tall field list
+   * cannot squeeze the preview — which is the one place the user's own design appears, and
+   * the thing everything else here is about. Both columns scroll inside it.
+   */
   min-height: 188px;
+  max-height: 40vh;
 }
 
 .sv-diagnostic__source {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
   align-content: start;
   padding: 14px 16px 16px;
   gap: 8px;
   min-width: 0;
+  overflow: auto;
 }
 
 .sv-coord {
@@ -490,8 +497,13 @@ body {
   padding: 0 14px;
 }
 
-/* The target line lifts to the panel surface — the one thing raised out of the recess. */
-.sv-excerpt__line[data-target='true'] {
+/*
+ * The target line lifts to the panel surface — the one thing raised out of the recess — and
+ * the caret row lifts with it, because the marker and the line it points into are one
+ * statement and a break between them would read as two.
+ */
+.sv-excerpt__line[data-target='true'],
+.sv-excerpt__caret-row {
   background: var(--sv-panel);
 }
 
@@ -515,19 +527,34 @@ body {
   white-space: pre;
 }
 
+/*
+ * A properties panel rather than a stack: text and class get the full measure because a
+ * className is long, and the three style values are short enough to sit two-up. That is
+ * most of what keeps the whole diagnostic inside its ceiling without a scrollbar, which
+ * matters because Apply is the last thing in it.
+ */
 .sv-fields {
   border-left: 1px solid var(--sv-line);
   padding: 14px 16px 18px;
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   align-content: start;
   overflow: auto;
 }
 
+.sv-fields > * {
+  grid-column: 1 / -1;
+}
+
 .sv-field {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
+}
+
+.sv-field--short {
+  grid-column: auto;
 }
 
 .sv-field__label {
@@ -715,7 +742,8 @@ body {
   height: 100%;
   overflow: auto;
   display: grid;
-  align-content: center;
+  /* Centred when it fits; from the top when it does not, rather than clipped at both. */
+  align-content: safe center;
   justify-items: center;
   padding: 40px 24px;
 }
