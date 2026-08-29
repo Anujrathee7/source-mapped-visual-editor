@@ -46,16 +46,37 @@ export const CRLF_FILE = 'src/components/Method.tsx';
 
 const SKIP = new Set(['node_modules', 'dist', '.sve', '.vite']);
 
-export function fixturePath(relative: string): string {
-  return path.join(FIXTURE_ROOT, relative);
+export function fixturePath(relative: string, root: string = FIXTURE_ROOT): string {
+  return path.join(root, relative);
 }
 
-export function readFixture(relative: string): string {
-  return readFileSync(fixturePath(relative), 'utf8');
+export function readFixture(relative: string, root: string = FIXTURE_ROOT): string {
+  return readFileSync(fixturePath(relative, root), 'utf8');
 }
 
-export function readFixtureLines(relative: string): string[] {
-  return readFixture(relative).split(/\r\n|\n|\r/);
+export function readFixtureLines(relative: string, root: string = FIXTURE_ROOT): string[] {
+  return readFixture(relative, root).split(/\r\n|\n|\r/);
+}
+
+/**
+ * A copy of `apps/demo` at `into`, with the same exclusions and the same Tailwind
+ * allowance the verification fixture needs.
+ *
+ * Split out for AC-15.6, which needs a *second* throwaway copy: its server is started by
+ * `@sve/host` from inside the studio rather than by Playwright, and pointing both suites
+ * at one tree would mean each restoring the other's files out from under it.
+ */
+export function copyDemoTo(into: string): void {
+  rmSync(into, { recursive: true, force: true });
+  mkdirSync(path.dirname(into), { recursive: true });
+  cpSync(DEMO_ROOT, into, {
+    recursive: true,
+    filter: (source) => !SKIP.has(path.basename(source)),
+  });
+  // Tailwind v4 discovers its sources by scanning, and skips anything a `.gitignore`
+  // excludes — which this whole directory is. Its own ignore file, allowing everything,
+  // keeps the fixture's utilities being generated.
+  writeFileSync(path.join(into, '.gitignore'), '!*\n', 'utf8');
 }
 
 /**
@@ -66,21 +87,11 @@ export function readFixtureLines(relative: string): string[] {
  * runs — the server would be pointed at a directory that does not exist yet.
  */
 export function prepareFixture(): void {
-  rmSync(FIXTURE_ROOT, { recursive: true, force: true });
-  mkdirSync(path.dirname(FIXTURE_ROOT), { recursive: true });
-  cpSync(DEMO_ROOT, FIXTURE_ROOT, {
-    recursive: true,
-    filter: (source) => !SKIP.has(path.basename(source)),
-  });
+  copyDemoTo(FIXTURE_ROOT);
 
   // AC-3.2's hostile bytes, in the file AC-5.8 reverts.
   const crlf = fixturePath(CRLF_FILE);
   writeFileSync(crlf, readFileSync(crlf, 'utf8').replace(/\r?\n/g, '\r\n'), 'utf8');
-
-  // Tailwind v4 discovers its sources by scanning, and skips anything a `.gitignore`
-  // excludes — which this whole directory is. Its own ignore file, allowing everything,
-  // keeps the fixture's utilities being generated.
-  writeFileSync(path.join(FIXTURE_ROOT, '.gitignore'), '!*\n', 'utf8');
 }
 
 /* ── keeping it clean between tests ───────────────────────────────────────── */
@@ -103,19 +114,19 @@ function collect(dir: string, into: FixtureSnapshot): void {
  * would quietly normalise it, and a restore that did so would hide the very thing AC-5.8
  * checks for.
  */
-export function snapshotFixture(): FixtureSnapshot {
+export function snapshotFixture(root: string = FIXTURE_ROOT): FixtureSnapshot {
   const snapshot: FixtureSnapshot = new Map();
-  collect(path.join(FIXTURE_ROOT, 'src'), snapshot);
+  collect(path.join(root, 'src'), snapshot);
   return snapshot;
 }
 
 /** Restores only what actually changed, so an untouched file's mtime does not move. */
-export function restoreFixture(snapshot: FixtureSnapshot): string[] {
+export function restoreFixture(snapshot: FixtureSnapshot, root: string = FIXTURE_ROOT): string[] {
   const restored: string[] = [];
   for (const [file, bytes] of snapshot) {
     if (existsSync(file) && Buffer.compare(readFileSync(file), bytes) === 0) continue;
     writeFileSync(file, bytes);
-    restored.push(path.relative(FIXTURE_ROOT, file).replace(/\\/g, '/'));
+    restored.push(path.relative(root, file).replace(/\\/g, '/'));
   }
   return restored;
 }

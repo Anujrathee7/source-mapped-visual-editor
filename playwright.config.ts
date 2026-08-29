@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { FIXTURE_URL } from './e2e/fixture.js';
+import { STUDIO_PORT, STUDIO_URL, STUDIO_WORKSPACE } from './e2e/studio.fixture.js';
 
 const DEMO_URL = 'http://localhost:5173';
 
@@ -58,6 +59,19 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'], baseURL: FIXTURE_URL },
           },
         ]),
+    // AC-15.6. The only suite that drives the studio rather than the in-page editor, and
+    // the only one whose project server is started by `@sve/host` rather than by
+    // Playwright. Serial for the same reason the others are: one fixture tree, real writes.
+    ...(LIVE
+      ? []
+      : [
+          {
+            name: 'studio',
+            testMatch: /studio\.spec\.ts/,
+            fullyParallel: false,
+            use: { ...devices['Desktop Chrome'], baseURL: STUDIO_URL },
+          },
+        ]),
     {
       name: 'live',
       testMatch: /live\.spec\.ts/,
@@ -88,6 +102,21 @@ export default defineConfig({
       // may be started with are the scripted one and the live one, and a typo in
       // `SVE_AGENT` must not quietly select something else.
       env: { SVE_AGENT: LIVE ? 'claude' : 'fake' },
+    },
+    {
+      // The studio, on a port it can be named by (AC-15.3): the fixture project's own
+      // config writes this origin down, and the frame answers nothing else.
+      command: `npm run dev -w @sve/studio -- --port ${STUDIO_PORT} --strictPort`,
+      url: STUDIO_URL,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: {
+        SVE_AGENT: 'fake',
+        // Clones and dependency caches, deliberately outside the project (AC-11.1) and
+        // named rather than left in the system temp directory, so a run that leaves
+        // something behind leaves it somewhere a person can look.
+        SVE_STUDIO_WORKSPACE: STUDIO_WORKSPACE,
+      },
     },
   ],
 });
