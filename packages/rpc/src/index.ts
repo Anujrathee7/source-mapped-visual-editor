@@ -29,6 +29,29 @@ export {
 } from './memory.js';
 
 export {
+  RPC_DIAGNOSTIC_KINDS,
+  createEndpoint,
+  type Endpoint,
+  type EndpointOptions,
+  type RpcDiagnostic,
+  type RpcDiagnosticKind,
+} from './endpoint.js';
+
+export {
+  DEFAULT_TIMEOUT_MS,
+  createRpcClient,
+  type RpcClient,
+  type RpcClientOptions,
+} from './client.js';
+
+export {
+  createRpcServer,
+  type RpcHandlers,
+  type RpcServer,
+  type RpcServerOptions,
+} from './server.js';
+
+export {
   APPLY_PHASES,
   AnchorRefSchema,
   AnchorSchema,
