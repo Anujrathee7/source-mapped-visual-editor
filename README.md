@@ -80,6 +80,40 @@ still painted, and the suite reports:
 **AC-5.1 passes with the verifier broken.** A verifier that always reports green sails
 through the happy path; only the deliberately-wrong write tells the two apart.
 
+### …and the same gate on the second way in
+
+v2 added a chat panel, and a second way to author an edit is the obvious place for a
+verification step to go missing. So the same mutation is run against the studio suite, where
+one edit is **clicked** and the other is **asked for in the chat**. With step 3 of
+`packages/studio/src/client/loop.ts` moved below step 4 — the DOM read while the override is
+still painted — `npx playwright test --project v2` reports:
+
+```
+  ok 1 [v2] › AC-13.2 the fixture is connected, rendered, and stamped (88ms)
+  ok 2 [v2] › AC-13.3 a clicked edit lands, and the file says so (1.4s)
+  ok 3 [v2] › AC-13.4 a chat edit lands through the same loop, and writes nothing before Apply (1.3s)
+  x  4 [v2] › AC-13.5 a clicked edit that is written wrong is caught, shown, and left in place (1.5m)
+  x  5 [v2] › AC-13.5 a chat edit that is written wrong is caught the same way (1.5m)
+  ok 6 [v2] › AC-13.6 a row reverts, byte for byte, and reads reverted (1.7s)
+  ok 7 [v2] › AC-13.7 a project with no Vite config is refused in the host's own words (610ms)
+  ok 8 [v2] › AC-13.7 a project where nothing was stamped is a blocking error, not a warning (827ms)
+  ok 9 [v2] › AC-13.2 nothing under apps/demo was touched (69ms)
+
+  1) AC-13.5 a clicked edit that is written wrong is caught, shown, and left in place
+     Expected: "drifted"   Received: "landed"
+  2) AC-13.5 a chat edit that is written wrong is caught the same way
+     Expected: "drifted"   Received: "landed"
+
+  2 failed
+  7 passed (3.9m)
+```
+
+**Both authoring paths go red, and only they do.** That is the whole claim: a chat message
+is not a shortcut to the filesystem, it is a way of producing an intent, and the intent is
+verified by the loop the click path already ran. If breaking the verifier had reddened only
+the clicked test, the chat panel would be an unverified back door and the green suite would
+have said nothing about it.
+
 ## Layout
 
 ```
