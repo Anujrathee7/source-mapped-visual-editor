@@ -75,7 +75,7 @@ const PALETTE = {
   '--sv-text': { light: '#161514', dark: '#F4F3F1' },
   '--sv-muted': { light: '#71706F', dark: '#8B8987' },
   '--sv-accent': { light: '#6A77E5', dark: '#8B95EE' },
-  '--sv-landed': { light: '#1F8A5B', dark: '#4ADE9A' },
+  '--sv-landed': { light: '#1A7A4F', dark: '#4ADE9A' },
   '--sv-drifted': { light: '#C4342F', dark: '#F87171' },
 } as const;
 
@@ -260,19 +260,38 @@ describe('AC-16.1 both modes meet WCAG AA, computed from the tokens', () => {
   );
 
   /**
-   * The accent and the two verdict colours are marks, not prose: the caret, the prompt
-   * marker, the selection edge, the status dot, and a single status word that is always
-   * paired with that dot. They are held to 1.4.11's non-text floor. Nothing readable is
-   * ever set in them — `--sv-text` and `--sv-muted` above are the text roles, and the rule
-   * below is what keeps it that way.
+   * The accent is a mark and only ever a mark: the caret, the prompt marker, the selection
+   * edge. It is held to 1.4.11's non-text floor, and the rule below keeps prose out of it.
    */
   const marks = MODES.flatMap((mode) =>
     SURFACES.flatMap((surface) =>
-      (['--sv-accent', '--sv-landed', '--sv-drifted'] as const).map((foreground) => ({
+      (['--sv-accent'] as const).map((foreground) => ({
         name: `${foreground} on ${surface} (${mode})`,
         ratio: contrast(PALETTE[foreground][mode], PALETTE[surface][mode]),
       })),
     ),
+  );
+
+  /**
+   * The verdict colours are *read*, not merely seen. The status dot is a mark, but the word
+   * beside it — Landed, Drifted — is a word, and a word held to the non-text floor is a word
+   * somebody has to squint at. They clear the text floor in both modes, so they are asserted
+   * against it rather than against the weaker one their dot would have allowed.
+   */
+  const verdicts = MODES.flatMap((mode) =>
+    SURFACES.flatMap((surface) =>
+      (['--sv-landed', '--sv-drifted'] as const).map((foreground) => ({
+        name: `${foreground} on ${surface} (${mode})`,
+        ratio: contrast(PALETTE[foreground][mode], PALETTE[surface][mode]),
+      })),
+    ),
+  );
+
+  it.each(verdicts.map((v) => [v.name, v.ratio]))(
+    '%s clears 4.5:1 — the verdict is a word, not just a dot',
+    (_name, ratio) => {
+      expect(ratio as number).toBeGreaterThanOrEqual(AA_TEXT);
+    },
   );
 
   it.each(marks.map((mark) => [mark.name, mark.ratio]))(

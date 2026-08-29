@@ -54,7 +54,7 @@ export const STUDIO_CSS = `
   --sv-text: #161514;
   --sv-muted: #71706F;
   --sv-accent: #6A77E5;
-  --sv-landed: #1F8A5B;
+  --sv-landed: #1A7A4F;
   --sv-drifted: #C4342F;
   color-scheme: light;
 }

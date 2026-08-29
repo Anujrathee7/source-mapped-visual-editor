@@ -124,7 +124,7 @@ legible; the colours around them are free to change.
 | `--sv-text` | `#161514` | `#F4F3F1` |
 | `--sv-muted` — labels, secondary | `#71706F` | `#8B8987` |
 | `--sv-accent` — the pointer | `#6A77E5` | `#8B95EE` |
-| `--sv-landed` | `#1F8A5B` | `#4ADE9A` |
+| `--sv-landed` | `#1A7A4F` | `#4ADE9A` |
 | `--sv-drifted` | `#C4342F` | `#F87171` |
 
 The neutrals are **warm** — a near-black of `#161514` rather than `#0E1116`, a near-white of
