@@ -113,6 +113,25 @@ describe('lifting a text override', () => {
     reasserter.dispose();
   });
 
+  /**
+   * What a landed edit looks like from here: the agent wrote the text the user asked for,
+   * so React's own render now matches the override exactly. The baseline has to follow it,
+   * or lifting the override writes the pre-edit text back over React's output and M6's
+   * verifier reads a stale value (AC-5.1).
+   */
+  it('follows React even when React renders exactly what the override says', async () => {
+    const el = mount(`<h1 data-sve-eid="${EID}">v1</h1>`);
+    const reasserter = createReasserter(document);
+    reasserter.apply([[EID, { text: 'override' }]]);
+
+    rerenderText(el, 'override');
+    await tick();
+
+    reasserter.apply([]);
+    expect(el.textContent).toBe('override');
+    reasserter.dispose();
+  });
+
   it('restores the original when React never re-rendered', () => {
     const el = mount(`<h1 data-sve-eid="${EID}">v1</h1>`);
     const reasserter = createReasserter(document);

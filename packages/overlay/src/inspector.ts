@@ -301,6 +301,16 @@ export const CHROME_CSS = `
   padding: 12px 14px;
 }
 
+.sve-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sve-buttons > .sve-apply {
+  flex: 1;
+}
+
 .sve-apply {
   font-family: var(--sve-sans);
   font-size: 12px;
@@ -319,6 +329,23 @@ export const CHROME_CSS = `
 }
 
 .sve-apply:focus-visible {
+  outline: 2px solid var(--sve-caret);
+  outline-offset: 2px;
+}
+
+.sve-revert {
+  font-family: var(--sve-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--sve-edge);
+  border-radius: 3px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.sve-revert:focus-visible {
   outline: 2px solid var(--sve-caret);
   outline-offset: 2px;
 }
@@ -394,6 +421,13 @@ export interface InspectorState {
   classValue: string;
   styleValues: Record<string, string>;
   canApply: boolean;
+  /**
+   * Whether an agent has written a file this element's edit can be taken back out of.
+   *
+   * Revert is not the inverse of Apply: it restores a *snapshot* the bridge took, so it
+   * is only meaningful once a job has actually touched disk (AC-5.2, AC-5.8).
+   */
+  canRevert: boolean;
   phase: ApplyPhase;
   verdict: Verdict | null;
 }
@@ -403,6 +437,7 @@ export interface InspectorCallbacks {
   onClass(value: string): void;
   onStyle(prop: string, value: string): void;
   onApply(): void;
+  onRevert(): void;
 }
 
 export interface Inspector {
@@ -497,12 +532,18 @@ export function createInspector(
   blast.hidden = true;
 
   const actions = el(doc, 'footer', 'sve-actions');
+  const buttons = el(doc, 'div', 'sve-buttons');
   const apply = el(doc, 'button', 'sve-apply');
   apply.type = 'button';
   apply.textContent = APPLY_LABELS.idle;
+  const revert = el(doc, 'button', 'sve-revert');
+  revert.type = 'button';
+  revert.textContent = 'Revert';
+  revert.hidden = true;
+  buttons.append(apply, revert);
   const verdict = el(doc, 'div', 'sve-verdict');
   verdict.hidden = true;
-  actions.append(apply, verdict);
+  actions.append(buttons, verdict);
 
   panel.append(coord, excerpt, fields, blast, actions);
 
@@ -521,6 +562,7 @@ export function createInspector(
     });
   }
   apply.addEventListener('click', () => callbacks.onApply());
+  revert.addEventListener('click', () => callbacks.onRevert());
 
   const renderExcerpt = (state: InspectorState): void => {
     excerptCode.textContent = '';
@@ -622,6 +664,9 @@ export function createInspector(
       blast.hidden = message === null;
       blast.textContent = message ?? '';
 
+      // Offered whenever there is a snapshot to restore, including after drift: AC-5.2
+      // leaves the file as the agent wrote it, so taking it back out has to be one press.
+      revert.hidden = !state.canRevert;
       apply.disabled = !state.canApply;
       apply.textContent =
         state.phase === 'applying'

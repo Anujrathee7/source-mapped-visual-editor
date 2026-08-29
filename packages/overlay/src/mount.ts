@@ -83,9 +83,13 @@ export interface OverlayHandle {
 
   captureIntent(kind: EditKind): EditIntent | null;
   onApply(handler: (intent: EditIntent) => void): () => void;
+  /** AC-5.8: the user asks for the bridge's snapshot of this element's file back. */
+  onRevert(handler: (eid: string) => void): () => void;
 
   setPhase(phase: ApplyPhase): void;
   setVerdict(eid: string, verdict: Verdict | null): void;
+  /** Whether a job has written a file this element's edit can be taken back out of. */
+  setRevertable(eid: string, revertable: boolean): void;
 
   /** Re-read the DOM: new loc, new excerpt, same element. */
   refresh(): void;
@@ -146,8 +150,10 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
   let selection: Anchor | null = null;
   let phase: ApplyPhase = 'idle';
   const verdicts = new Map<string, Verdict>();
+  const revertable = new Set<string>();
   const sources = new Map<string, string | null>();
   const applyHandlers = new Set<(intent: EditIntent) => void>();
+  const revertHandlers = new Set<(eid: string) => void>();
   const disposers: Array<() => void> = [];
   let unmounted = false;
 
@@ -194,6 +200,7 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
         classValue: '',
         styleValues: {},
         canApply: false,
+        canRevert: false,
         phase,
         verdict: null,
       };
@@ -211,6 +218,7 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       classValue: el ? desiredClasses(el, override).join(' ') : '',
       styleValues: { ...override?.style },
       canApply: override !== undefined && inferKind(override) !== null,
+      canRevert: revertable.has(selection.eid),
       phase,
       verdict: verdicts.get(selection.eid) ?? null,
     };
@@ -264,6 +272,11 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       if (!intent) return;
       // M6 owns everything past this point. The overlay does not fetch, wait, or verify.
       for (const handler of [...applyHandlers]) handler(intent);
+    },
+
+    onRevert: () => {
+      if (!selection) return;
+      for (const handler of [...revertHandlers]) handler(selection.eid);
     },
   });
   layer.append(inspector.element);
@@ -411,7 +424,11 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       const el = selectedElement();
       if (!el) return null;
 
-      const after = captureSnapshot(el);
+      // A class *removal* is a CSS reset, not a DOM write (AC-4.4), so the element still
+      // carries the class the user took off. The intent records what the user asked for,
+      // which is the list the class field shows — otherwise a removal would reach the
+      // agent as "change nothing" and be refused as not matching the line.
+      const after = { ...captureSnapshot(el), classes: desiredClasses(el, override) };
       const lifted = handle.liftOverride(selection.eid);
       const before = captureSnapshot(el);
       if (lifted) handle.restoreOverride(selection.eid, lifted);
@@ -426,6 +443,13 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       };
     },
 
+    onRevert: (handler) => {
+      revertHandlers.add(handler);
+      return () => {
+        revertHandlers.delete(handler);
+      };
+    },
+
     setPhase: (next) => {
       phase = next;
       render();
@@ -436,6 +460,12 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       else verdicts.delete(eid);
       // A verdict ends the flight, whichever way it went.
       phase = 'idle';
+      render();
+    },
+
+    setRevertable: (eid, canRevert) => {
+      if (canRevert) revertable.add(eid);
+      else revertable.delete(eid);
       render();
     },
 
@@ -459,6 +489,7 @@ export function mountOverlay(options: MountOptions = {}): OverlayHandle | null {
       unmounted = true;
       for (const dispose of disposers.splice(0)) dispose();
       applyHandlers.clear();
+      revertHandlers.clear();
       // Order matters: the reasserter restores React's DOM on the way out, so it has to go
       // before the host it was drawn beside.
       reasserter.dispose();

@@ -71,6 +71,8 @@ describe('the editor session', () => {
         expect(live).toBe(1);
         order.push(`start ${intent.after.text}`);
         await tick();
+        // The write, and the re-render it causes.
+        document.querySelector('h1')!.textContent = intent.after.text;
         order.push(`end ${intent.after.text}`);
         live -= 1;
         return { jobId: `job_${order.length}`, status: 'landed' };
@@ -122,7 +124,8 @@ describe('the editor session', () => {
 
   it('offers Revert once the agent has written, and not before', async () => {
     const overlay = setUp({
-      async apply() {
+      async apply(intent) {
+        document.querySelector('h1')!.textContent = intent.after.text;
         return { jobId: 'job_1', status: 'landed' };
       },
       async revert(jobId) {
@@ -143,7 +146,9 @@ describe('the editor session', () => {
   it('restores the file, clears the override, and says so', async () => {
     const reverted: string[] = [];
     const overlay = setUp({
-      async apply() {
+      async apply(intent) {
+        // The agent writes and React renders the result.
+        document.querySelector('h1')!.textContent = intent.after.text;
         return { jobId: 'job_1', status: 'landed' };
       },
       async revert(jobId) {
@@ -194,7 +199,8 @@ describe('the editor session', () => {
   it('sends one intent per press and nothing on disposal', async () => {
     const calls: EditResult[] = [];
     const overlay = setUp({
-      async apply() {
+      async apply(intent) {
+        document.querySelector('h1')!.textContent = intent.after.text;
         const result: EditResult = { jobId: `job_${calls.length + 1}`, status: 'landed' };
         calls.push(result);
         return result;

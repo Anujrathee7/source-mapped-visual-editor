@@ -48,13 +48,39 @@ export function createReasserter(root: Document): Reasserter {
   let observations = 0;
   let disposed = false;
 
-  const observer = new MutationObserver(() => {
+  /**
+   * React wrote something, so whatever is in the DOM right now is React's — and it becomes
+   * the baseline even when it happens to *equal* the override.
+   *
+   * That last case is not a curiosity: it is precisely what a landed edit looks like. The
+   * agent writes the text the user asked for, hot reload renders it, and the element now
+   * reads exactly as the override does. Without this, the baseline would still hold the
+   * pre-edit text, lifting the override would write that back over React's output, and the
+   * verifier would read a stale value and report drift on every successful edit (AC-5.1).
+   *
+   * Records are consulted only to decide *which* baselines are React's to refresh. The
+   * re-assertion itself still re-derives everything from the live DOM, so a record whose
+   * target is a text node three levels down cannot confuse it.
+   */
+  const refreshBaselines = (records: readonly MutationRecord[]): void => {
+    for (const record of records) {
+      const from =
+        record.target.nodeType === Node.ELEMENT_NODE
+          ? (record.target as Element)
+          : record.target.parentElement;
+      for (let el: Element | null = from; el; el = el.parentElement) {
+        const baseline = baselines.get(el);
+        if (!baseline) continue;
+        if (baseline.text !== null) baseline.text = el.textContent ?? '';
+        break;
+      }
+    }
+  };
+
+  const observer = new MutationObserver((records) => {
     observations += 1;
     if (isReasserting || disposed) return;
-    // Rather than mapping each record back to a stamped ancestor, re-derive the whole
-    // asserted set from the live DOM. It is the same work the first apply does, it cannot
-    // be confused by a record whose target is a text node three levels down, and after
-    // HMR the elements are new objects anyway.
+    refreshBaselines(records);
     assert();
   });
 

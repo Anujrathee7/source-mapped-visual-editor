@@ -232,6 +232,7 @@ describe('runVerification', () => {
       target,
       apply: async () => landed(),
       watch: alwaysUpdated,
+      applied: target.overrides.get(EID),
     });
 
     const lift = target.calls.indexOf('liftOverride');
@@ -253,6 +254,7 @@ describe('runVerification', () => {
       target,
       apply: async () => landed(),
       watch: alwaysUpdated,
+      applied: target.overrides.get(EID),
     });
 
     expect(outcome.verdict.status).toBe('landed');
@@ -260,6 +262,28 @@ describe('runVerification', () => {
     expect(outcome.jobId).toBe('job_1');
     expect(target.overrides.has(EID)).toBe(false);
     expect(target.phases).toContain('applying');
+  });
+
+  it('keeps an override the user typed while the job was in flight', async () => {
+    const target = makeTarget({
+      rendered: { text: 'Ship faster', classes: ['title'], computed: computed() },
+      override: { text: 'Ship faster' },
+    });
+
+    const outcome = await runVerification(makeIntent(), {
+      target,
+      apply: async () => {
+        // The user carries on typing while the agent works.
+        target.overrides.set(EID, { text: 'Ship sooner' });
+        return landed();
+      },
+      watch: alwaysUpdated,
+      applied: { text: 'Ship faster' },
+    });
+
+    // The edit landed — and the newer ask is still on the page, not silently discarded.
+    expect(outcome.verdict.status).toBe('landed');
+    expect(target.overrides.get(EID)).toEqual({ text: 'Ship sooner' });
   });
 
   /**
@@ -278,6 +302,7 @@ describe('runVerification', () => {
       target,
       apply: async () => landed(),
       watch: alwaysUpdated,
+      applied: target.overrides.get(EID),
     });
 
     expect(outcome.verdict.status).toBe('drifted');
@@ -305,6 +330,7 @@ describe('runVerification', () => {
       target,
       apply: async () => ({ jobId: 'job_2', status: 'blocked', message: 'BLOCKED: not that line' }),
       watch: alwaysUpdated,
+      applied: target.overrides.get(EID),
     });
 
     expect(outcome.verdict.status).toBe('blocked');
@@ -325,6 +351,7 @@ describe('runVerification', () => {
       target,
       apply: async () => ({ jobId: 'job_3', status: 'stalled', message: 'wrote nothing' }),
       watch: alwaysUpdated,
+      applied: target.overrides.get(EID),
     });
 
     expect(outcome.verdict.status).toBe('stalled');
@@ -343,6 +370,7 @@ describe('runVerification', () => {
       target,
       apply: async () => landed(),
       watch: neverUpdated,
+      applied: target.overrides.get(EID),
     });
 
     expect(outcome.verdict.status).toBe('stalled');
@@ -359,6 +387,7 @@ describe('runVerification', () => {
         throw new Error('Failed to fetch');
       },
       watch: alwaysUpdated,
+      applied: target.overrides.get(EID),
     });
 
     expect(outcome.verdict.status).toBe('error');
@@ -373,6 +402,7 @@ describe('runVerification', () => {
       target,
       apply: async () => landed(),
       watch: alwaysUpdated,
+      applied: target.overrides.get(EID),
     });
 
     expect(outcome.verdict.status).toBe('drifted');
