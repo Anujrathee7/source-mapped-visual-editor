@@ -5,7 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Plugin } from 'vite';
 import { SVE_APPLY_PATH, type ConnectHandle } from '@sve/bridge';
-import { CLIENT_ENTRY_SPECIFIER, RESOLVED_ENTRY_ID, VIRTUAL_ENTRY_ID, sve } from '../src/index.js';
+import {
+  CLIENT_ENTRY_SPECIFIER,
+  CLIENT_PACKAGES,
+  RESOLVED_ENTRY_ID,
+  VIRTUAL_ENTRY_ID,
+  sve,
+} from '../src/index.js';
 
 /* ── harness ──────────────────────────────────────────────────────────────── */
 
@@ -299,6 +305,86 @@ describe('sve() — serving a project that has never heard of @sve (AC-11.3)', (
     const editor = byName(sve({ root: makeRoot() }), 'sve:editor');
     const exclude = callConfig(editor, { root: makeRoot() }).optimizeDeps?.exclude ?? [];
     expect(exclude).toEqual(expect.arrayContaining(['@sve/vite', '@sve/overlay', '@sve/protocol']));
+  });
+
+  /* -- the studio's foot inside the frame (AC-15.5) ------------------------ */
+
+  it("covers the studio's preview module, and everything it imports", () => {
+    // `@sve/studio/preview` is served into the framed page and imports `@sve/rpc`. Both
+    // directories have to be readable and both have to stay out of the optimizer, or the
+    // preview works here — where `fs.allow` happens to cover the repository root — and
+    // fails for the foreign project AC-11.3 was about.
+    expect(CLIENT_PACKAGES).toEqual(
+      expect.arrayContaining(['@sve/studio', '@sve/rpc', '@sve/overlay', '@sve/protocol']),
+    );
+
+    const root = makeRoot();
+    const editor = byName(sve({ root }), 'sve:editor');
+    const config = callConfig(editor, { root });
+    const allow = (config.server?.fs?.allow ?? []).map((entry) => path.resolve(entry));
+
+    for (const pkg of ['studio', 'rpc']) {
+      expect(allow).toContain(path.join(PACKAGES_ROOT, pkg));
+    }
+    expect(config.optimizeDeps?.exclude ?? []).toEqual(
+      expect.arrayContaining(['@sve/studio', '@sve/rpc']),
+    );
+  });
+
+  it('still refuses to make @sve/bridge reachable from the page', () => {
+    // It holds file-write capability. The page reaches the bridge through two guarded
+    // routes or not at all, and an allow list the dev server serves from is not a route.
+    expect(CLIENT_PACKAGES).not.toContain('@sve/bridge');
+
+    const root = makeRoot();
+    const editor = byName(sve({ root }), 'sve:editor');
+    const config = callConfig(editor, { root });
+    const allow = (config.server?.fs?.allow ?? []).map((entry) => path.resolve(entry));
+    expect(allow).not.toContain(path.join(PACKAGES_ROOT, 'bridge'));
+    expect(config.optimizeDeps?.exclude ?? []).not.toContain('@sve/bridge');
+  });
+});
+
+/* == the studio origin is configuration (AC-15.3) ========================= */
+
+describe('sve({ studioOrigin })', () => {
+  const clientSource = (options: Parameters<typeof sve>[0]): string => {
+    const editor = byName(sve(options), 'sve:editor');
+    const load = typeof editor.load === 'function' ? editor.load : editor.load?.handler;
+    const code = load?.call({} as never, RESOLVED_ENTRY_ID, {} as never);
+    return typeof code === 'string' ? code : '';
+  };
+
+  it('threads the named origin into the module that boots the overlay', () => {
+    expect(clientSource({ root: makeRoot(), studioOrigin: 'http://localhost:5300' })).toContain(
+      '"studioOrigin":"http://localhost:5300"',
+    );
+  });
+
+  it('says nothing at all when no studio was named', () => {
+    // Absent rather than empty: the client tells "no studio" from "a studio" by the field
+    // being there, and an empty string in the emitted module reads as a decision somebody
+    // made rather than one nobody did.
+    expect(clientSource({ root: makeRoot() })).not.toContain('studioOrigin');
+  });
+
+  it('refuses a wildcard at startup, as @sve/rpc refuses it on the wire', () => {
+    // A wildcard expectation accepts whatever document posts into the frame — which is
+    // every page that can reach it, and this origin decides who may reach the bridge.
+    expect(() => sve({ root: makeRoot(), studioOrigin: '*' })).toThrow(/wildcard/i);
+  });
+
+  it('refuses a URL where an origin was wanted, rather than narrowing it quietly', () => {
+    // `postMessage` compares only the origin part, so accepting these would accept a
+    // wider set of senders than the config appears to name.
+    expect(() => sve({ root: makeRoot(), studioOrigin: 'http://localhost:5300/' })).toThrow(
+      /did you mean http:\/\/localhost:5300\?/,
+    );
+    expect(() => sve({ root: makeRoot(), studioOrigin: 'localhost:5300' })).toThrow(/not an origin/);
+  });
+
+  it('is not consulted at all when the editor is switched off', () => {
+    expect(sve({ enabled: false, studioOrigin: '*' })).toEqual([]);
   });
 });
 
