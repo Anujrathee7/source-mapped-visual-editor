@@ -49,91 +49,95 @@ export function ConnectView(props: ConnectViewProps): ReactElement {
 
   return (
     <main className="sv-connect">
-      <h1 className="sv-connect__title">Source-mapped visual editor</h1>
-      <p className="sv-connect__lede">
-        Open a Vite + React project. Nothing is written to it by connecting, and nothing is
-        written by editing until a change has been applied and verified.
-      </p>
-
-      <form className="sv-connect__form" onSubmit={submit}>
-        <input
-          className="sv-field__input"
-          aria-label="Folder path or repository URL"
-          placeholder="/path/to/project  ·  owner/name  ·  https://github.com/owner/name"
-          value={target}
-          onChange={(event) => setTarget(event.target.value)}
-        />
-        <button type="submit" className="sv-button sv-button--primary">
-          Connect
-        </button>
-      </form>
-
-      <label className="sv-providers__note">
-        <input
-          type="checkbox"
-          checked={install}
-          onChange={(event) => setInstall(event.target.checked)}
-        />{' '}
-        Install dependencies for a cloned repository. You will be asked again, with the
-        command, before anything runs.
-      </label>
-
-      {state.kind === 'connecting' ? (
-        <p className="sv-phase" role="status">
-          <span className="sv-phase__dot" aria-hidden="true" />
-          {PHASE_WORDS[state.phase] ?? state.phase}
-          {state.detail === undefined ? null : <span> {state.detail}</span>}
+      <div className="sv-connect__card">
+        <div className="sv-connect__head">
+          <h1 className="sv-connect__title">Source-mapped visual editor</h1>
+        </div>
+        <p className="sv-connect__lede">
+          Open a Vite + React project. Nothing is written to it by connecting, and nothing is
+          written by editing until a change has been applied and verified.
         </p>
-      ) : null}
 
-      {state.kind === 'confirming' ? (
-        <div className="sv-notice sv-notice--error" role="alertdialog" aria-label="Confirm">
-          <p className="sv-notice__title">{state.request.message}</p>
-          <pre className="sv-notice__command">{state.request.command}</pre>
-          <p className="sv-notice__body">in {state.request.directory}</p>
-          <div className="sv-notice__actions">
-            {props.controller.confirmations().map((pending) => (
-              <span key={pending.id} className="sv-notice__actions">
-                {/* Cancel first, and it is the plain button: the default answer is no. */}
-                <button
-                  type="button"
-                  className="sv-button"
-                  onClick={() => void props.controller.answer(pending.id, false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="sv-button sv-button--primary"
-                  onClick={() => void props.controller.answer(pending.id, true)}
-                >
-                  Run it
-                </button>
-              </span>
-            ))}
+        <form className="sv-connect__form" onSubmit={submit}>
+          <input
+            className="sv-field__input"
+            aria-label="Folder path or repository URL"
+            placeholder="/path/to/project  ·  owner/name  ·  https://github.com/owner/name"
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+          />
+          <button type="submit" className="sv-button sv-button--primary">
+            Connect
+          </button>
+        </form>
+
+        <label className="sv-providers__note">
+          <input
+            type="checkbox"
+            checked={install}
+            onChange={(event) => setInstall(event.target.checked)}
+          />{' '}
+          Install dependencies for a cloned repository. You will be asked again, with the
+          command, before anything runs.
+        </label>
+
+        {state.kind === 'connecting' ? (
+          <p className="sv-phase" role="status">
+            <span className="sv-phase__dot" aria-hidden="true" />
+            {PHASE_WORDS[state.phase] ?? state.phase}
+            {state.detail === undefined ? null : <span> {state.detail}</span>}
+          </p>
+        ) : null}
+
+        {state.kind === 'confirming' ? (
+          <div className="sv-notice sv-notice--error" role="alertdialog" aria-label="Confirm">
+            <p className="sv-notice__title">{state.request.message}</p>
+            <pre className="sv-notice__command">{state.request.command}</pre>
+            <p className="sv-notice__body">in {state.request.directory}</p>
+            <div className="sv-notice__actions">
+              {props.controller.confirmations().map((pending) => (
+                <span key={pending.id} className="sv-notice__actions">
+                  {/* Cancel first, and it is the plain button: the default answer is no. */}
+                  <button
+                    type="button"
+                    className="sv-button"
+                    onClick={() => void props.controller.answer(pending.id, false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="sv-button sv-button--primary"
+                    onClick={() => void props.controller.answer(pending.id, true)}
+                  >
+                    Run it
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {state.kind === 'refused' ? (
-        <div className="sv-notice sv-notice--error" role="alert">
-          <p className="sv-notice__title">{state.target} was not opened.</p>
-          <p className="sv-notice__body">{state.message}</p>
-        </div>
-      ) : null}
+        {state.kind === 'refused' ? (
+          <div className="sv-notice sv-notice--error" role="alert">
+            <p className="sv-notice__title">{state.target} was not opened.</p>
+            <p className="sv-notice__body">{state.message}</p>
+          </div>
+        ) : null}
 
-      {state.kind === 'blocked' ? (
-        <div className="sv-notice sv-notice--error" role="alert">
-          <p className="sv-notice__title">Nothing in this project can be selected.</p>
-          <p className="sv-notice__body">{state.diagnostic.message}</p>
-        </div>
-      ) : null}
+        {state.kind === 'blocked' ? (
+          <div className="sv-notice sv-notice--error" role="alert">
+            <p className="sv-notice__title">Nothing in this project can be selected.</p>
+            <p className="sv-notice__body">{state.diagnostic.message}</p>
+          </div>
+        ) : null}
 
-      <ProviderPicker
-        providers={props.providers}
-        onSelect={props.onSelectProvider}
-        onConfigure={props.onConfigureProvider}
-      />
+        <ProviderPicker
+          providers={props.providers}
+          onSelect={props.onSelectProvider}
+          onConfigure={props.onConfigureProvider}
+        />
+      </div>
     </main>
   );
 }

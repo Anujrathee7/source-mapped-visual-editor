@@ -79,6 +79,10 @@ const PALETTE = {
   '--sv-drifted': { light: '#C4342F', dark: '#F87171' },
 } as const;
 
+/** Every surface a foreground can land on. */
+const SURFACES = ['--sv-ground', '--sv-panel', '--sv-field'] as const;
+const MODES = ['light', 'dark'] as const;
+
 /**
  * The three blocks that may carry a colour.
  *
@@ -140,13 +144,21 @@ describe('AC-16.3 the neutrals are warm, not slate', () => {
     expect(green).toBeGreaterThanOrEqual(blue);
   });
 
-  it('is warm rather than merely grey — the ramp carries a real red-to-blue spread', () => {
-    const spread = NEUTRALS.map((token) => {
-      const [red, , blue] = channels(PALETTE[token].light);
-      return red - blue;
-    });
-    // `--sv-panel` is pure white and cannot lean; every other neutral must.
-    expect(spread.filter((value) => value > 0).length).toBeGreaterThanOrEqual(NEUTRALS.length - 1);
+  it.each(MODES.flatMap((mode) => [
+    [`--sv-text ${mode}`, PALETTE['--sv-text'][mode]],
+    [`--sv-ground ${mode}`, PALETTE['--sv-ground'][mode]],
+  ]))('%s leans warm rather than merely being grey', (_name, hex) => {
+    const [red, , blue] = channels(hex as string);
+    expect(red - blue).toBeGreaterThan(0);
+  });
+
+  it('carries the warmth through the whole dark ramp, where a slate would show most', () => {
+    // In light the mid greys can sit on the neutral axis without reading cold; against a
+    // near-black they cannot, so this is the ramp worth pinning end to end.
+    for (const token of NEUTRALS) {
+      const [red, , blue] = channels(PALETTE[token].dark);
+      expect(red - blue, `${token} dark`).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -223,10 +235,6 @@ function contrast(a: string, b: string): number {
   const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
   return (high + 0.05) / (low + 0.05);
 }
-
-/** Every surface a foreground can land on. */
-const SURFACES = ['--sv-ground', '--sv-panel', '--sv-field'] as const;
-const MODES = ['light', 'dark'] as const;
 
 describe('AC-16.1 both modes meet WCAG AA, computed from the tokens', () => {
   /** 4.5:1 — WCAG 1.4.3 for text below 18.66px bold / 24px regular, which is all of it. */
@@ -454,7 +462,7 @@ describe('AC-16.6 uppercase micro-labels do the labelling', () => {
 describe('the type roles §3 assigns', () => {
   it('sets the interface in Inter and the code in a monospace', () => {
     expect(STUDIO_CSS).toContain("--sv-sans: 'Inter'");
-    expect(rulesFor('body')[0]?.body).toContain('font-family: var(--sv-sans)');
+    expect(rulesFor('body').some((rule) => rule.body.includes('font-family: var(--sv-sans)'))).toBe(true);
     expect(shadowToken()).not.toBe('');
   });
 

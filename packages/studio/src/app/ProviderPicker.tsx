@@ -38,7 +38,9 @@ export function ProviderPicker(props: ProviderPickerProps): ReactElement {
   };
 
   return (
-    <section className="sv-providers" aria-label="Coding agent">
+    <section className="sv-connect__section" aria-label="Coding agent">
+      <p className="sv-label">Coding agent</p>
+
       <div className="sv-providers">
         {props.providers.map((provider) => (
           <button

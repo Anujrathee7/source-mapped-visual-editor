@@ -82,7 +82,7 @@ export function ChangesPanel(props: ChangesPanelProps): ReactElement {
     <section className="sv-panel sv-changes" aria-label="Changes">
       <header className="sv-panel__head">
         <span>Changes</span>
-        <span>{props.rows.length}</span>
+        <span aria-hidden="true">{props.rows.length}</span>
       </header>
       <div className="sv-panel__body">
         {props.rows.length === 0 ? (

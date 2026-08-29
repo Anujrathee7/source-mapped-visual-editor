@@ -1,55 +1,113 @@
 /**
- * The workspace, in the vernacular the panel already spoke (AC-12.6).
+ * The workspace (AC-16), in the direction `docs/design.md` §3 sets.
  *
- * `docs/design.md` §1 is the whole brief and it scales up rather than being reinterpreted.
- * Three rules from it are load-bearing here and are enforced by `test/design.test.ts`
- * against this string rather than trusted:
+ * §3 supersedes §1 for this surface and only this surface. `packages/overlay` is still the
+ * compiler-diagnostic chrome a project served without the studio gets, and it still keeps
+ * `paper`, the travelling caret and the rest of it. Nothing here is shared with it.
  *
- *  - `paper` is the one warm surface and it belongs to the source excerpt alone. In a
- *    workspace the temptation is to reach for it as a "light panel"; it is the one thing on
- *    screen standing for the real file on disk, and a second use would spend that.
- *  - the caret keeps its own colour and never doubles as a status. It also earns one more
- *    job here — the chat's prompt marker — because that is the same job: a pointer.
- *  - `landed` and `drifted` appear nowhere but a verdict. In the log that means the status
- *    dot and the status word, which *are* the verdict, and nothing else.
+ * Three rules survive the change of palette, because they are about legibility rather than
+ * colour, and `test/design.test.ts` holds this string to all three:
  *
- * Two decisions this file makes that the panel never had to:
+ *  - **The excerpt is inset.** It is the one thing on screen standing for the real file, so
+ *    it sits on the recessed `--sv-field` rather than on the panel. §1 made that point with
+ *    a unique warm surface; here the recess and the mono make it, and `--sv-field` is
+ *    shared with the inputs. What survives is the inset, not the exclusivity.
+ *  - **The accent is a pointer.** The caret, the chat's prompt marker, the selected row's
+ *    edge, the focus ring, the drag edge — all the same job. It never means success,
+ *    failure or progress.
+ *  - **`landed` and `drifted` appear nowhere but a verdict**: the status dot and the status
+ *    word. A verdict colour spent on a notice or a border would stop the verdict meaning
+ *    anything.
  *
- * **Proportions.** The preview is the one place the user's own design appears, so it takes
- * the room and the chrome around it is quiet: no border of its own, no toolbar competing
- * for attention, one thin coordinate bar. Changes is a column of coordinates and reads as
- * one — narrow, monospace, fixed by default. Chat is prose and gets a comfortable measure.
- * Both flanks are resizable and both are clamped, so no drag can squeeze the preview below
- * a width the project can honestly render in.
+ * Four decisions this file makes that the brief left open:
  *
- * **Stillness.** AC-12.7 forbids layout shift when a verdict resolves, which is a design
- * constraint before it is a CSS one: the verdict word lives in a slot wide enough for the
- * longest of them, the row has a floor, and Revert occupies its space whether or not it is
- * offered. `Applying…` becoming `Landed` moves nothing.
+ * **Panels are cards on the ground.** §3 asks for 10px radius on panels and for generous
+ * space; those two together only make sense if a panel has an edge to round, so the three
+ * are laid on `--sv-ground` with a gutter between them rather than butted edge to edge.
+ * The whitespace is the separation, the hairline border is the edge, and the drag handle
+ * lives in the gutter — invisible until it is wanted, because a rail drawn in the gap
+ * between two already-bordered cards is a third line saying what two lines said.
+ *
+ * **Two dark blocks, not one.** A reader who has never touched the toggle gets dark from
+ * `prefers-color-scheme`; a reader who has gets it from `data-theme`, and that has to win
+ * in *both* directions — the attribute is why `:root:not([data-theme='light'])` guards the
+ * query rather than the query standing alone.
+ *
+ * **Stillness.** AC-16.5 removes the one animation §1 spent, so there is no motion at all
+ * here: no keyframes, no transitions, not even on hover. That makes AC-12.7's no-layout-
+ * shift rule matter more rather than less, so the verdict word still lives in a slot wide
+ * enough for the longest of them, a row still has a floor, Revert still occupies its space
+ * whether or not it is offered, and the selected row's edge is a border that was always
+ * there and only changes colour.
+ *
+ * **Every colour is a token, and that is scanned for.** A hex may appear on a declaration
+ * in this file and nowhere else in the package.
  */
 export const STUDIO_CSS = `
-:root {
-  --sve-ink: #0E1116;
-  --sve-slab: #1A1F27;
-  --sve-paper: #F7F4EC;
-  --sve-caret: #3D7BFF;
-  --sve-landed: #35C489;
-  --sve-drifted: #E5484D;
+/* ── the palette, light ──────────────────────────────────────────────────── */
 
-  --sve-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --sve-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-  --sve-edge: rgba(247, 244, 236, 0.12);
-  --sv-text: #E7E9EC;
-  --sv-dim: rgba(231, 233, 236, 0.62);
-  --sv-faint: rgba(231, 233, 236, 0.4);
-  /* The ground behind the preview, which belongs to the page rather than to the chrome. */
-  --sv-stage: #FFFFFF;
+:root {
+  --sv-ground: #FBFBFA;
+  --sv-panel: #FFFFFF;
+  --sv-field: #F6F6F6;
+  --sv-line: #ECEBEB;
+  --sv-text: #161514;
+  --sv-muted: #71706F;
+  --sv-accent: #6A77E5;
+  --sv-landed: #1F8A5B;
+  --sv-drifted: #C4342F;
+  color-scheme: light;
+}
+
+/* ── the palette, dark — for the reader who has expressed no preference ──── */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --sv-ground: #141413;
+    --sv-panel: #1B1B19;
+    --sv-field: #100F0E;
+    --sv-line: #2B2A28;
+    --sv-text: #F4F3F1;
+    --sv-muted: #8B8987;
+    --sv-accent: #8B95EE;
+    --sv-landed: #4ADE9A;
+    --sv-drifted: #F87171;
+    color-scheme: dark;
+  }
+}
+
+/*
+ * ...and for the reader who has. Last, so it beats the query in both directions: chosen
+ * dark under a light system, and chosen light under a dark one via the guard above.
+ */
+:root[data-theme='dark'] {
+  --sv-ground: #141413;
+  --sv-panel: #1B1B19;
+  --sv-field: #100F0E;
+  --sv-line: #2B2A28;
+  --sv-text: #F4F3F1;
+  --sv-muted: #8B8987;
+  --sv-accent: #8B95EE;
+  --sv-landed: #4ADE9A;
+  --sv-drifted: #F87171;
+  color-scheme: dark;
+}
+
+/* ── type, elevation and layout — the same in both modes ─────────────────── */
+
+:root {
+  --sv-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sv-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /*
+   * Mixed from the ink rather than from black, so the one shadow in the interface is as
+   * warm as the neutrals it falls on, and follows the mode without a second declaration.
+   */
+  --sv-shadow: color-mix(in srgb, var(--sv-text) 10%, transparent);
 
   /* Written by the splitters. Clamped there, not here, so a drag cannot starve the middle. */
   --sv-changes: 300px;
   --sv-chat: 360px;
-
-  color-scheme: dark;
 }
 
 * {
@@ -64,11 +122,12 @@ body,
 
 body {
   margin: 0;
-  background: var(--sve-ink);
+  background: var(--sv-ground);
   color: var(--sv-text);
-  font-family: var(--sve-sans);
+  font-family: var(--sv-sans);
   font-size: 13px;
-  line-height: 1.55;
+  font-weight: 400;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -77,26 +136,43 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--sve-caret);
+  outline: 2px solid var(--sv-accent);
   outline-offset: 2px;
 }
 
-/* ── the workspace ───────────────────────────────────────────────────────── */
+/* The one label device the whole interface labels with. */
+.sv-label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sv-muted);
+}
+
+/* ── the workspace: three cards on the ground ────────────────────────────── */
 
 .sv-shell {
   display: grid;
   grid-template-columns: var(--sv-changes) 1px minmax(420px, 1fr) 1px var(--sv-chat);
-  grid-template-rows: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 10px;
   height: 100%;
+  padding: 10px;
   overflow: hidden;
 }
 
+/*
+ * The drag edge lives in the gutter and is drawn only when it is wanted: two bordered
+ * cards with air between them have already said where one ends.
+ */
 .sv-splitter {
   appearance: none;
   border: 0;
   padding: 0;
   width: 1px;
-  background: var(--sve-edge);
+  justify-self: center;
+  background: transparent;
   cursor: col-resize;
   position: relative;
 }
@@ -104,12 +180,12 @@ body {
 .sv-splitter::after {
   content: '';
   position: absolute;
-  inset: 0 -4px;
+  inset: 0 -8px;
 }
 
 .sv-splitter:hover,
 .sv-splitter:focus-visible {
-  background: var(--sve-caret);
+  background: var(--sv-accent);
 }
 
 .sv-splitter:focus-visible {
@@ -122,20 +198,24 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--sv-panel);
+  border: 1px solid var(--sv-line);
+  border-radius: 10px;
 }
 
 .sv-panel__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px 10px;
-  font-family: var(--sve-mono);
+  min-height: 44px;
+  padding: 0 16px;
   font-size: 10px;
-  letter-spacing: 0.12em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--sv-faint);
-  border-bottom: 1px solid var(--sve-edge);
+  color: var(--sv-muted);
+  border-bottom: 1px solid var(--sv-line);
 }
 
 .sv-panel__body {
@@ -145,17 +225,13 @@ body {
 
 .sv-empty {
   margin: 0;
-  padding: 18px 14px;
-  color: var(--sv-dim);
+  padding: 20px 16px;
+  color: var(--sv-muted);
   font-size: 12px;
+  max-width: 46ch;
 }
 
 /* ── changes ─────────────────────────────────────────────────────────────── */
-
-.sv-changes {
-  background: var(--sve-ink);
-  border-right: 0;
-}
 
 .sv-log {
   list-style: none;
@@ -167,23 +243,29 @@ body {
   /*
    * A floor, so a row that gains a mismatch block grows downward and a row that resolves
    * does not resize at all. AC-12.7: a verdict arriving must move nothing above it.
+   *
+   * The selection edge is a border that is always there, because a 2px border appearing on
+   * click would shift every word in the row sideways.
    */
-  min-height: 58px;
-  padding: 10px 14px 12px;
-  border-bottom: 1px solid var(--sve-edge);
+  min-height: 72px;
+  padding: 14px 16px 16px;
+  border-bottom: 1px solid var(--sv-line);
+  border-left: 2px solid transparent;
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  align-content: start;
 }
 
 .sv-row[data-selected='true'] {
-  background: rgba(61, 123, 255, 0.09);
+  background: var(--sv-field);
+  border-left-color: var(--sv-accent);
 }
 
 .sv-row__main {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 8px;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   padding: 0;
   border: 0;
@@ -195,7 +277,7 @@ body {
 }
 
 .sv-row__loc {
-  font-family: var(--sve-mono);
+  font-family: var(--sv-mono);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,19 +290,19 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  border: 1px solid var(--sv-faint);
+  border: 1px solid var(--sv-line);
   align-self: center;
 }
 
 .sv-row[data-status='landed'] .sv-row__verdict-dot {
-  background: var(--sve-landed);
-  border-color: var(--sve-landed);
+  background: var(--sv-landed);
+  border-color: var(--sv-landed);
 }
 
 .sv-row[data-status='drifted'] .sv-row__verdict-dot,
 .sv-row[data-status='error'] .sv-row__verdict-dot {
-  background: var(--sve-drifted);
-  border-color: var(--sve-drifted);
+  background: var(--sv-drifted);
+  border-color: var(--sv-drifted);
 }
 
 .sv-row__verdict {
@@ -230,24 +312,24 @@ body {
    */
   min-width: 9ch;
   text-align: right;
-  font-family: var(--sve-mono);
+  font-family: var(--sv-mono);
   font-size: 11px;
-  color: var(--sv-dim);
+  color: var(--sv-muted);
 }
 
 .sv-row[data-status='landed'] .sv-row__verdict {
-  color: var(--sve-landed);
+  color: var(--sv-landed);
 }
 
 .sv-row[data-status='drifted'] .sv-row__verdict,
 .sv-row[data-status='error'] .sv-row__verdict {
-  color: var(--sve-drifted);
+  color: var(--sv-drifted);
 }
 
 .sv-row__summary {
   margin: 0;
   padding-left: 18px;
-  color: var(--sv-dim);
+  color: var(--sv-muted);
   font-size: 12px;
   overflow: hidden;
   display: -webkit-box;
@@ -256,29 +338,29 @@ body {
 }
 
 .sv-row__origin {
-  font-family: var(--sve-mono);
   font-size: 10px;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--sv-faint);
+  color: var(--sv-muted);
 }
 
 .sv-row__mismatch {
-  margin: 2px 0 0;
-  padding: 8px 10px;
-  margin-left: 18px;
-  border-left: 2px solid var(--sve-edge);
-  font-family: var(--sve-mono);
+  margin: 4px 0 0 18px;
+  padding: 10px 12px;
+  background: var(--sv-field);
+  border-radius: 8px;
+  font-family: var(--sv-mono);
   font-size: 11px;
-  color: var(--sv-dim);
+  color: var(--sv-muted);
   display: grid;
-  gap: 2px;
+  gap: 3px;
   overflow-x: auto;
 }
 
 .sv-row__actions {
   padding-left: 18px;
-  min-height: 22px;
+  min-height: 30px;
 }
 
 /*
@@ -295,18 +377,18 @@ body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
-  background: var(--sve-ink);
 }
 
 .sv-preview__bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  font-family: var(--sve-mono);
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 16px;
+  font-family: var(--sv-mono);
   font-size: 11px;
-  color: var(--sv-dim);
-  border-bottom: 1px solid var(--sve-edge);
+  color: var(--sv-muted);
+  border-bottom: 1px solid var(--sv-line);
 }
 
 .sv-preview__url {
@@ -319,7 +401,7 @@ body {
 .sv-preview__stage {
   position: relative;
   min-height: 0;
-  background: var(--sv-stage);
+  background: var(--sv-panel);
 }
 
 .sv-preview__frame {
@@ -335,19 +417,28 @@ body {
   display: grid;
   align-content: center;
   justify-items: start;
-  gap: 10px;
-  padding: 24px;
-  background: var(--sve-ink);
+  gap: 12px;
+  padding: 28px;
+  background: var(--sv-panel);
   color: var(--sv-text);
 }
 
 /* ── the diagnostic, under the preview it is about ───────────────────────── */
 
 .sv-diagnostic {
-  border-top: 1px solid var(--sve-edge);
+  border-top: 1px solid var(--sv-line);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
-  min-height: 168px;
+  min-height: 188px;
+}
+
+.sv-diagnostic__source {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
+  padding: 14px 16px 16px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .sv-coord {
@@ -355,8 +446,7 @@ body {
   gap: 12px;
   justify-content: space-between;
   align-items: baseline;
-  padding: 10px 14px;
-  font-family: var(--sve-mono);
+  font-family: var(--sv-mono);
   font-size: 12px;
 }
 
@@ -370,19 +460,21 @@ body {
 
 .sv-coord__pos {
   flex: none;
-  color: var(--sv-dim);
+  color: var(--sv-muted);
 }
 
+/*
+ * Inset, because it stands for the file. The recess and the mono are what say so now that
+ * the surface is no longer unique to it.
+ */
 .sv-excerpt {
-  background: var(--sve-paper);
-  color: var(--sve-ink);
-  font-family: var(--sve-mono);
+  background: var(--sv-field);
+  font-family: var(--sv-mono);
   font-size: 12px;
-  line-height: 1.6;
-  padding: 8px 0;
-  margin: 0 14px 12px;
-  overflow-x: auto;
-  border-radius: 2px;
+  line-height: 1.7;
+  padding: 10px 0;
+  overflow: auto;
+  border-radius: 10px;
 }
 
 .sv-excerpt__code {
@@ -394,19 +486,20 @@ body {
 .sv-excerpt__line,
 .sv-excerpt__caret-row {
   display: flex;
-  gap: 10px;
-  padding: 0 12px;
+  gap: 12px;
+  padding: 0 14px;
 }
 
+/* The target line lifts to the panel surface — the one thing raised out of the recess. */
 .sv-excerpt__line[data-target='true'] {
-  background: rgba(61, 123, 255, 0.09);
+  background: var(--sv-panel);
 }
 
 .sv-excerpt__no {
   flex: none;
   width: 3ch;
   text-align: right;
-  opacity: 0.45;
+  color: var(--sv-muted);
   user-select: none;
 }
 
@@ -416,84 +509,66 @@ body {
 
 .sv-caret,
 .sv-caret-pad {
-  color: var(--sve-caret);
-  font-family: var(--sve-mono);
-  font-weight: 700;
+  color: var(--sv-accent);
+  font-family: var(--sv-mono);
+  font-weight: 600;
   white-space: pre;
 }
 
-.sv-caret--travelling {
-  color: var(--sve-caret);
-  display: inline-block;
-  animation: sv-caret-travel 900ms ease-in-out infinite;
-}
-
-@keyframes sv-caret-travel {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(4px); }
-  100% { transform: translateY(0); }
-}
-
 .sv-fields {
-  border-left: 1px solid var(--sve-edge);
-  padding: 10px 14px 14px;
+  border-left: 1px solid var(--sv-line);
+  padding: 14px 16px 18px;
   display: grid;
-  gap: 10px;
+  gap: 14px;
   align-content: start;
   overflow: auto;
 }
 
 .sv-field {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .sv-field__label {
-  font-family: var(--sve-mono);
   font-size: 10px;
-  letter-spacing: 0.09em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--sv-faint);
+  color: var(--sv-muted);
 }
 
 .sv-field__input {
-  font-family: var(--sve-mono);
+  font-family: var(--sv-mono);
   font-size: 12px;
-  color: inherit;
-  background: var(--sve-slab);
-  border: 1px solid var(--sve-edge);
-  border-radius: 3px;
-  padding: 6px 8px;
+  color: var(--sv-text);
+  background: var(--sv-field);
+  border: 1px solid var(--sv-line);
+  border-radius: 8px;
+  padding: 8px 10px;
   min-width: 0;
 }
 
 .sv-field__input:disabled {
-  opacity: 0.45;
+  color: var(--sv-muted);
   cursor: not-allowed;
 }
 
 .sv-field__input:focus-visible {
-  outline: 2px solid var(--sve-caret);
+  outline: 2px solid var(--sv-accent);
   outline-offset: 1px;
 }
 
-.sv-field__reason {
-  margin: 0;
-  font-size: 11px;
-  color: var(--sv-dim);
-}
-
+.sv-field__reason,
 .sv-blast {
   margin: 0;
   font-size: 11px;
-  color: var(--sv-dim);
+  color: var(--sv-muted);
 }
 
 /* ── chat ────────────────────────────────────────────────────────────────── */
 
 .sv-chat {
-  border-left: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
@@ -501,9 +576,9 @@ body {
 .sv-transcript {
   list-style: none;
   margin: 0;
-  padding: 12px 14px;
+  padding: 16px;
   display: grid;
-  gap: 16px;
+  gap: 22px;
   align-content: start;
 }
 
@@ -514,131 +589,190 @@ body {
  */
 .sv-turn {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .sv-turn__request {
   display: grid;
   grid-template-columns: 1ch minmax(0, 1fr);
-  gap: 8px;
+  gap: 10px;
   margin: 0;
-  font-family: var(--sve-mono);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .sv-turn__marker {
-  color: var(--sve-caret);
+  color: var(--sv-accent);
   user-select: none;
 }
 
 .sv-turn__reply {
   margin: 0;
-  color: var(--sv-dim);
+  padding-left: calc(1ch + 10px);
+  color: var(--sv-muted);
   font-size: 12px;
 }
 
 .sv-turn__reply code {
-  font-family: var(--sve-mono);
+  font-family: var(--sv-mono);
   color: var(--sv-text);
 }
 
 .sv-turn__actions {
   display: flex;
   gap: 8px;
-  padding-top: 2px;
+  padding-left: calc(1ch + 10px);
 }
 
 .sv-compose {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--sve-edge);
+  align-items: end;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--sv-line);
 }
 
 .sv-compose__input {
-  font-family: var(--sve-sans);
+  font-family: var(--sv-sans);
   font-size: 12px;
-  color: inherit;
-  background: var(--sve-slab);
-  border: 1px solid var(--sve-edge);
-  border-radius: 3px;
-  padding: 8px 10px;
+  color: var(--sv-text);
+  background: var(--sv-field);
+  border: 1px solid var(--sv-line);
+  border-radius: 8px;
+  padding: 10px 12px;
   resize: none;
-  min-height: 38px;
+  min-height: 42px;
 }
 
 .sv-compose__input:focus-visible {
-  outline: 2px solid var(--sve-caret);
+  outline: 2px solid var(--sv-accent);
   outline-offset: 1px;
 }
 
-/* ── controls ────────────────────────────────────────────────────────────── */
+/* ── controls: every action is a pill ────────────────────────────────────── */
 
 .sv-button {
-  font-family: var(--sve-sans);
+  font-family: var(--sv-sans);
   font-size: 12px;
-  font-weight: 600;
-  color: inherit;
-  background: transparent;
-  border: 1px solid var(--sve-edge);
-  border-radius: 3px;
-  padding: 7px 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--sv-text);
+  background: var(--sv-panel);
+  border: 1px solid var(--sv-line);
+  border-radius: 999px;
+  padding: 9px 16px;
   cursor: pointer;
 }
 
+.sv-button:not(.sv-button--primary):hover:not(:disabled) {
+  background: var(--sv-field);
+}
+
 .sv-button--primary {
-  color: var(--sve-ink);
+  color: var(--sv-ground);
   background: var(--sv-text);
-  border-color: var(--sv-text);
+  border: 1px solid var(--sv-text);
 }
 
 .sv-button:disabled {
-  opacity: 0.4;
+  color: var(--sv-muted);
   cursor: not-allowed;
 }
 
+.sv-button--primary:disabled {
+  color: var(--sv-panel);
+  background: var(--sv-muted);
+  border-color: var(--sv-muted);
+}
+
 .sv-button:focus-visible {
-  outline: 2px solid var(--sve-caret);
+  outline: 2px solid var(--sv-accent);
   outline-offset: 2px;
 }
 
-/* ── connecting ──────────────────────────────────────────────────────────── */
+.sv-theme {
+  font-family: var(--sv-sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sv-muted);
+  background: none;
+  border: 1px solid var(--sv-line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.sv-theme:hover {
+  color: var(--sv-text);
+}
+
+/* ── connecting: the one card that floats ────────────────────────────────── */
 
 .sv-connect {
   height: 100%;
+  overflow: auto;
   display: grid;
   align-content: center;
-  justify-items: stretch;
-  gap: 18px;
-  max-width: 660px;
-  margin: 0 auto;
-  padding: 32px 24px;
+  justify-items: center;
+  padding: 40px 24px;
+}
+
+.sv-connect__card {
+  width: 100%;
+  max-width: 620px;
+  display: grid;
+  gap: 20px;
+  padding: 32px;
+  background: var(--sv-panel);
+  border: 1px solid var(--sv-line);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px var(--sv-shadow), 0 12px 32px var(--sv-shadow);
+}
+
+.sv-connect__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .sv-connect__title {
   margin: 0;
-  font-family: var(--sve-mono);
-  font-size: 20px;
+  font-family: var(--sv-sans);
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
 
 .sv-connect__lede {
   margin: 0;
-  color: var(--sv-dim);
+  max-width: 54ch;
+  color: var(--sv-muted);
+  font-size: 13px;
 }
 
 .sv-connect__form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 10px;
+}
+
+.sv-connect__section {
+  display: grid;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--sv-line);
 }
 
 .sv-phase {
-  font-family: var(--sve-mono);
+  margin: 0;
+  font-family: var(--sv-mono);
   font-size: 12px;
-  color: var(--sv-dim);
+  color: var(--sv-muted);
   display: flex;
   gap: 10px;
   align-items: center;
@@ -648,47 +782,45 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--sv-faint);
+  background: var(--sv-muted);
 }
 
+/*
+ * A notice is never a verdict, so it is never coloured like one: the error variant is
+ * distinguished by dropping to the recessed surface, and the sentence does the rest.
+ */
 .sv-notice {
-  border: 1px solid var(--sve-edge);
-  border-left-width: 2px;
-  border-radius: 3px;
-  padding: 12px 14px;
+  border: 1px solid var(--sv-line);
+  border-radius: 10px;
+  padding: 16px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .sv-notice__title {
   margin: 0;
-  font-family: var(--sve-mono);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .sv-notice__body {
   margin: 0;
   font-size: 12px;
-  color: var(--sv-dim);
+  color: var(--sv-muted);
 }
 
 .sv-notice--error {
-  border-left-color: var(--sv-text);
-  background: var(--sve-slab);
-}
-
-.sv-notice--warning {
-  border-left-color: var(--sv-faint);
+  background: var(--sv-field);
 }
 
 .sv-notice__command {
-  font-family: var(--sve-mono);
+  margin: 0;
+  font-family: var(--sv-mono);
   font-size: 12px;
-  background: var(--sve-slab);
-  border: 1px solid var(--sve-edge);
-  border-radius: 3px;
-  padding: 6px 8px;
+  background: var(--sv-field);
+  border: 1px solid var(--sv-line);
+  border-radius: 8px;
+  padding: 8px 10px;
   overflow-x: auto;
 }
 
@@ -702,15 +834,15 @@ body {
 
 .sv-providers {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .sv-provider {
   display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid var(--sve-edge);
-  border-radius: 3px;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid var(--sv-line);
+  border-radius: 10px;
   background: none;
   color: inherit;
   font: inherit;
@@ -718,32 +850,30 @@ body {
   cursor: pointer;
 }
 
+.sv-provider:hover {
+  background: var(--sv-field);
+}
+
 .sv-provider[aria-pressed='true'] {
-  border-color: var(--sve-caret);
+  border-color: var(--sv-accent);
 }
 
 .sv-provider__label {
-  font-family: var(--sve-mono);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .sv-provider__cost,
-.sv-provider__summary {
-  margin: 0;
-  font-size: 11px;
-  color: var(--sv-dim);
-}
-
-.sv-provider__missing {
-  margin: 0;
-  font-size: 11px;
-  color: var(--sv-text);
-}
-
+.sv-provider__summary,
+.sv-provider__missing,
 .sv-providers__note {
   margin: 0;
   font-size: 11px;
-  color: var(--sv-dim);
+  color: var(--sv-muted);
+}
+
+.sv-provider__missing {
+  color: var(--sv-text);
 }
 
 /* ── to a laptop, and no further down than it has to go ──────────────────── */
@@ -757,7 +887,12 @@ body {
   .sv-splitter {
     width: auto;
     height: 1px;
+    justify-self: stretch;
     cursor: row-resize;
+  }
+
+  .sv-splitter::after {
+    inset: -8px 0;
   }
 
   .sv-shell > .sv-changes {
@@ -775,13 +910,29 @@ body {
   .sv-diagnostic {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .sv-fields {
+    border-left: 0;
+    border-top: 1px solid var(--sv-line);
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .sv-caret--travelling {
-    color: var(--sve-caret);
-    animation: none;
-    opacity: 0.55;
+@media (max-width: 640px) {
+  .sv-shell {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .sv-connect {
+    padding: 20px 12px;
+  }
+
+  .sv-connect__card {
+    padding: 24px 20px;
+  }
+
+  .sv-connect__form {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 `;

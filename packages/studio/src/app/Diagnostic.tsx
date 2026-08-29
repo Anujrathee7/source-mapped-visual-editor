@@ -27,7 +27,7 @@ export interface DiagnosticProps {
   onApply(): void;
 }
 
-function Excerpt({ state, travelling }: { state: InspectorState; travelling: boolean }): ReactElement {
+function Excerpt({ state }: { state: InspectorState }): ReactElement {
   if (!state.excerpt) {
     return <p className="sv-empty">{state.sourceMessage}</p>;
   }
@@ -49,7 +49,7 @@ function Excerpt({ state, travelling }: { state: InspectorState; travelling: boo
                       tabs blanked, so the marker sits under the column whatever the
                       indentation is made of. Rendered as given. */}
                   <span className="sv-caret-pad">{state.excerpt!.caret.pad}</span>
-                  <span className={travelling ? 'sv-caret sv-caret--travelling' : 'sv-caret'}>^</span>
+                  <span className="sv-caret">^</span>
                 </span>
               </span>
             ) : null}
@@ -83,15 +83,17 @@ export function Diagnostic(props: DiagnosticProps): ReactElement {
 
   return (
     <section className="sv-diagnostic" aria-label="Selected element">
-      <div>
+      <div className="sv-diagnostic__source">
+        <p className="sv-label">Source</p>
         <header className="sv-coord">
           <span className="sv-coord__file">{loc?.file ?? anchor.loc}</span>
           <span className="sv-coord__pos">{loc ? `${loc.line}:${loc.col}` : ''}</span>
         </header>
-        <Excerpt state={state} travelling={applying} />
+        <Excerpt state={state} />
       </div>
 
       <div className="sv-fields">
+        <p className="sv-label">Element</p>
         <div className="sv-field">
           <label className="sv-field__label" htmlFor="sv-field-text">
             text
