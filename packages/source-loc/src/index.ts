@@ -13,6 +13,6 @@ export {
   type TextKind,
 } from './babel-plugin.js';
 
-export { sourceLoc, type SourceLocViteOptions } from './vite-plugin.js';
+export { sourceLoc, type SourceLocViteOptions, type StampReport } from './vite-plugin.js';
 
 export { SYNTAX_PLUGINS } from './syntax.js';
