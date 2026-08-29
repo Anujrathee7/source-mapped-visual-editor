@@ -12,6 +12,7 @@
  * one's hot reload has landed and the page has been re-stamped. That is what makes "none
  * targets a stale line" true in the browser as well as on the server.
  */
+import { inferKind } from '@sve/overlay';
 import type { EditIntent, EditResult } from '@sve/protocol';
 import { createChat, type AppliedOutcome, type Chat } from './chat.js';
 import { createChangeLog, type ChangeLog, type ChangeOrigin } from './changes.js';
@@ -34,6 +35,8 @@ export interface Workspace {
   /** Everything the studio has seen, so the planner names rather than invents. */
   elements(): PlanTarget[];
   applyIntent(intent: EditIntent, origin: ChangeOrigin): Promise<AppliedOutcome>;
+  /** The click path: whatever is selected, whatever it has been overridden with. */
+  applySelection(): Promise<AppliedOutcome | null>;
   selectRow(id: string): Promise<void>;
   revertRow(id: string): Promise<void>;
   subscribe(listener: () => void): () => void;
@@ -138,6 +141,24 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     chat,
     elements,
     applyIntent,
+
+    /**
+     * Apply, pressed on the panel under the preview.
+     *
+     * It goes through `applyIntent` like everything else. A second path that built its own
+     * request would be a second place the loop could be forgotten.
+     */
+    async applySelection() {
+      const anchor = preview.state?.anchor ?? null;
+      if (!anchor) return null;
+      const override = await preview.getOverride(anchor.eid);
+      if (!override) return null;
+      const kind = inferKind(override);
+      if (!kind) return null;
+      const intent = await preview.captureIntent(kind);
+      if (!intent) return null;
+      return applyIntent(intent, 'preview');
+    },
 
     async selectRow(id) {
       const row = log.row(id);
