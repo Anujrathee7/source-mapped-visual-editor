@@ -52,6 +52,16 @@ docs/acceptance/      acceptance criteria, written BEFORE implementation
   compiler diagnostic (`paper` excerpt strip, blue caret under the exact column); the demo
   app is a cold coastal palette. Keep the two visually unmistakable.
 
+## Two zod majors are installed
+
+The Claude Agent SDK hoists zod 4 to the root; `@sve/protocol`, `@sve/bridge` and `@sve/rpc`
+each resolve their own nested zod 3. Composing a schema from one package into another
+therefore crosses module instances. It works — the suites exercise it — but `instanceof`
+checks against `ZodType` do not, and upgrading zod in one package without the others would
+break composition in a way no type error catches.
+
+Upgrade them together or not at all.
+
 ## Working in a git worktree
 
 Run `npm install` in the worktree before running anything. A fresh worktree has an empty
