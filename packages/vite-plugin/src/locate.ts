@@ -18,13 +18,29 @@ const require = createRequire(import.meta.url);
 export const CLIENT_ENTRY_PATH = fileURLToPath(new URL('./client/entry.ts', import.meta.url));
 
 /**
- * The three packages that end up in the browser: this one, and the two it imports.
+ * Every package that ends up in the browser: this one, and everything it imports there.
+ *
+ * `@sve/studio` and `@sve/rpc` joined for AC-15.5. A framed page loads
+ * `@sve/studio/preview`, which imports `@sve/rpc`, so both directories have to be readable
+ * by the dev server and both have to stay out of the optimizer — otherwise the preview
+ * works in this workspace, where `fs.allow` happens to cover the repository root, and
+ * fails for exactly the foreign project AC-11.3 was about.
+ *
+ * `@sve/studio`'s own `.` entry reaches `@sve/host` and `@sve/bridge`; only `./preview` is
+ * browser-safe, and it imports neither. Listing the directory makes its *files* servable,
+ * not its Node entry reachable — and the Node entry's imports are not on this list.
  *
  * `@sve/bridge` is deliberately absent. It holds file-write capability and is reached only
  * from the Node half, so putting it on an allow list the dev server serves from would
  * offer the page a path to it.
  */
-export const CLIENT_PACKAGES = ['@sve/vite', '@sve/overlay', '@sve/protocol'] as const;
+export const CLIENT_PACKAGES = [
+  '@sve/vite',
+  '@sve/overlay',
+  '@sve/protocol',
+  '@sve/rpc',
+  '@sve/studio',
+] as const;
 
 /**
  * The directory holding the `package.json` that `specifier` resolves into.

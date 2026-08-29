@@ -71,15 +71,29 @@ function studioWindow(): Studio {
     },
   };
 
-  const view = {
-    parent,
-    addEventListener: (_type: 'message', listener: (event: MessageEventLike) => void) => {
-      listeners.add(listener);
+  /**
+   * jsdom's own window, reporting a different `parent` and holding its own `message`
+   * listeners. Everything else has to keep working — `getComputedStyle` above all, since
+   * that is how a snapshot is read — so this delegates rather than reimplements: the
+   * overlay is mounted into a real realm and only the frame relationship is a fiction.
+   */
+  const view = new Proxy(window, {
+    get(target, property, receiver) {
+      if (property === 'parent') return parent;
+      if (property === 'addEventListener') {
+        return (type: string, listener: (event: MessageEventLike) => void): void => {
+          if (type === 'message') listeners.add(listener);
+        };
+      }
+      if (property === 'removeEventListener') {
+        return (type: string, listener: (event: MessageEventLike) => void): void => {
+          if (type === 'message') listeners.delete(listener);
+        };
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
     },
-    removeEventListener: (_type: 'message', listener: (event: MessageEventLike) => void) => {
-      listeners.delete(listener);
-    },
-  } as unknown as FrameView;
+  }) as unknown as FrameView;
 
   return {
     view,

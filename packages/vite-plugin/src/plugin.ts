@@ -33,6 +33,9 @@ import {
 } from './constants.js';
 import { CLIENT_ENTRY_PATH, CLIENT_PACKAGES, clientPackageDirs } from './locate.js';
 
+/** The one origin `@sve/rpc` refuses outright, refused here too, at the point it is named. */
+const WILDCARD_ORIGIN = '*';
+
 export interface SveOptions {
   /**
    * Turns the editor off entirely — no stamping, no bridge, no overlay.
@@ -65,6 +68,20 @@ export interface SveOptions {
    * `src/components/Hero.tsx` into a dev-server URL.
    */
   viteRoot?: string;
+
+  /**
+   * The origin of the studio allowed to drive this server's pages (AC-15.3).
+   *
+   * Set it and a page served from here, *when it is in a frame*, mounts the overlay
+   * without chrome and answers `@sve/rpc` over `postMessage` to its parent. Leave it out
+   * and nothing changes: the in-page editor, exactly as v1 has it.
+   *
+   * Configuration, never inference. `document.referrer` and `location.ancestorOrigins` are
+   * both chosen by whoever framed the page, and this origin decides who may reach the
+   * bridge — so inferring it would hand the first page to frame somebody's project the
+   * ability to drive their filesystem. A wildcard is refused, as it is in `@sve/rpc`.
+   */
+  studioOrigin?: string;
 
   /** How long the overlay waits for hot reload before reporting `stalled` (AC-5.7). */
   verifyTimeoutMs?: number;
@@ -99,6 +116,49 @@ export interface ClientConfig {
   viteRoot: string;
   verifyTimeoutMs: number;
   settleMs: number;
+  /**
+   * Present only when a studio was named. Absent rather than empty: the client tells
+   * "no studio" from "a studio" by the field being there, and an empty string in the
+   * emitted module would read as a configuration somebody made.
+   */
+  studioOrigin?: string;
+}
+
+/**
+ * `@sve/rpc`'s `assertTargetOrigin`, applied where the value is first written down.
+ *
+ * Refused at startup rather than at the first `postMessage`, so a misconfiguration is a
+ * dev server that will not start instead of a preview that silently never connects — and
+ * so the wildcard never reaches a page at all.
+ */
+function assertStudioOrigin(studioOrigin: string | undefined): void {
+  if (studioOrigin === undefined) return;
+  if (studioOrigin === WILDCARD_ORIGIN) {
+    throw new Error(
+      'sve({ studioOrigin }): a wildcard accepts whatever document posts into the frame, ' +
+        "which is every page that can reach it. Name the studio's origin.",
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(studioOrigin);
+  } catch {
+    throw new Error(`sve({ studioOrigin }): not an origin: ${JSON.stringify(studioOrigin)}`);
+  }
+  // `new URL` accepts more than an origin: `localhost:5300` parses as the scheme
+  // `localhost:`, whose origin is the opaque `"null"` — a string that would then be
+  // compared against every `MessageEvent.origin` and match none of them.
+  if (parsed.origin === 'null') {
+    throw new Error(`sve({ studioOrigin }): not an origin: ${JSON.stringify(studioOrigin)}`);
+  }
+  // A path, a query or a trailing slash means a URL was passed where an origin was wanted,
+  // and `postMessage` would compare only its origin part — quietly, and wider.
+  if (parsed.origin !== studioOrigin) {
+    throw new Error(
+      `sve({ studioOrigin }): expected an origin, got ${JSON.stringify(studioOrigin)} ` +
+        `(did you mean ${parsed.origin}?)`,
+    );
+  }
 }
 
 function editorPlugin(options: SveOptions): Plugin {
@@ -109,6 +169,7 @@ function editorPlugin(options: SveOptions): Plugin {
     viteRoot: options.viteRoot ?? '',
     verifyTimeoutMs: options.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS,
     settleMs: options.settleMs ?? DEFAULT_SETTLE_MS,
+    ...(options.studioOrigin === undefined ? {} : { studioOrigin: options.studioOrigin }),
   });
 
   return {
@@ -223,6 +284,7 @@ function editorPlugin(options: SveOptions): Plugin {
  */
 export function sve(options: SveOptions = {}): Plugin[] {
   if (options.enabled === false) return [];
+  assertStudioOrigin(options.studioOrigin);
   return [
     sourceLoc({
       ...(options.root === undefined ? {} : { root: options.root }),
