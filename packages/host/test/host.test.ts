@@ -6,6 +6,7 @@
  * host the suite can drive directly, and a criterion that needs Playwright to observe it
  * is a criterion the studio in M14 would be a prerequisite for.
  */
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import type { AgentRunner } from '@sve/bridge';
@@ -383,6 +384,55 @@ describe('AC-11.7 — two projects open at once do not touch each other', () => 
       expect((await get(second, '/src/App.jsx')).body).not.toContain('data-sve-loc');
       expect(first.status().stamping.files).toEqual(['src/App.jsx']);
       expect(second.status().stamping.files).toEqual(['app/App.jsx']);
+    },
+    SERVER_TIMEOUT * 2,
+  );
+
+  it(
+    'an edit applied through one session never reaches the other',
+    async () => {
+      // Each session has its own bridge, its own serial queue and its own snapshot store,
+      // and this is what that means in practice: the same request posted to one server
+      // writes to one project and leaves the other untouched.
+      const renamer = (name: string): AgentRunner => ({
+        name,
+        requiresNetwork: false,
+        async run(ctx) {
+          const source = (await ctx.fs.readFile(ctx.file)).toString('utf8');
+          await ctx.fs.writeFile(ctx.file, Buffer.from(source.replace('Fixture', name), 'utf8'));
+          return { kind: 'edited', files: [ctx.file] };
+        },
+      });
+
+      const host = newHost({ createAgent: ({ sessionId }) => renamer(`renamed-by-${sessionId}`) });
+      const first = await connect(host, makeProject());
+      const second = await connect(host, makeProject());
+
+      const response = await fetch(new URL('/__sve/apply', first.url), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', connection: 'close' },
+        body: JSON.stringify({
+          intents: [
+            {
+              eid: 'src/App.jsx#h1:0',
+              eidIndex: 0,
+              loc: 'src/App.jsx:3:7',
+              tag: 'h1',
+              kind: 'text',
+              before: { text: 'Fixture', classes: ['title'], computed: {} },
+              after: { text: 'Renamed', classes: ['title'], computed: {} },
+              instruction: 'rename the heading',
+            },
+          ],
+        }),
+      });
+      expect(response.status).toBe(200);
+      await response.json();
+
+      expect(readFileSync(path.join(first.root, 'src', 'App.jsx'), 'utf8')).toContain(
+        `renamed-by-${first.id}`,
+      );
+      expect(readFileSync(path.join(second.root, 'src', 'App.jsx'), 'utf8')).toContain('Fixture');
     },
     SERVER_TIMEOUT * 2,
   );
