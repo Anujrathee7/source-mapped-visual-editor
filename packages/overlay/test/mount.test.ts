@@ -330,3 +330,66 @@ describe('the hooks M6 drives', () => {
     expect(overlay.selection!.loc).toBe('apps/demo/src/Hero.tsx:9:5');
   });
 });
+
+/* == mounting without chrome (AC-15.2) ==================================== */
+
+describe('mounting without chrome', () => {
+  it('creates no inspector panel at all, rather than hiding one', async () => {
+    renderPage();
+    const overlay = mountForTest({ chrome: false });
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
+    await tick();
+
+    // Not `hidden`, not `display: none` — absent. A panel that exists is a panel a
+    // stylesheet can reveal, and inside the frame it would cover the design the studio
+    // is drawing the diagnostic *about*.
+    expect(chrome().querySelector('.sve-panel')).toBeNull();
+    expect(chrome().querySelector('.sve-excerpt')).toBeNull();
+    expect(chrome().querySelectorAll('input')).toHaveLength(0);
+    expect(chrome().querySelector('.sve-apply')).toBeNull();
+  });
+
+  it('still selects, overrides, re-asserts and captures — only the chrome is gone', async () => {
+    renderPage();
+    const overlay = mountForTest({ chrome: false });
+    const h1 = document.querySelector('h1')!;
+
+    // Selection by click: the listener is the mechanism, not the panel.
+    h1.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(overlay.selection).toMatchObject({ eid: H1_EID, loc: H1_LOC, tag: 'h1' });
+
+    overlay.restoreOverride(H1_EID, { text: 'Ship faster', style: { color: 'rgb(59, 130, 246)' } });
+    await tick();
+    expect(h1.textContent).toBe('Ship faster');
+    expect(getComputedStyle(h1).color).toBe('rgb(59, 130, 246)');
+    expect(overlay.reasserter.active).toBe(true);
+
+    // And the re-asserter still fights React for the text it was given.
+    rerenderText(h1, 'Swim today');
+    await tick();
+    expect(h1.textContent).toBe('Ship faster');
+
+    expect(overlay.currentLoc(H1_EID, 0)).toBe(H1_LOC);
+    expect(overlay.readSnapshot(H1_EID, 0)!.text).toBe('Ship faster');
+    expect(overlay.captureIntent('text')).toMatchObject({ eid: H1_EID, kind: 'text' });
+  });
+
+  it('leaves the source it has no excerpt to render unfetched', async () => {
+    renderPage();
+    const fetchSource = vi.fn(fetchFixtureSource);
+    const overlay = mountForTest({ chrome: false, fetchSource });
+    overlay.select({ eid: H1_EID, eidIndex: 0 });
+    await tick();
+    overlay.refresh();
+    await tick();
+    // The excerpt belongs to the studio, which fetches the file from inside the frame
+    // itself. Reading it here as well would be two requests for one selection.
+    expect(fetchSource).not.toHaveBeenCalled();
+  });
+
+  it('defaults to drawing the chrome, so nothing that worked stops working', () => {
+    renderPage();
+    mountForTest();
+    expect(chrome().querySelector('.sve-panel')).not.toBeNull();
+  });
+});
