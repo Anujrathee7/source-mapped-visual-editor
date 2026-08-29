@@ -3,6 +3,14 @@ import { createFakeAgent, FAKE_MODES, isFakeMode } from './fake.js';
 import type { AgentEnv, AgentRunner, AgentRunnerFactory } from './types.js';
 
 export * from './types.js';
+export {
+  pathOf,
+  refusalIn,
+  systemPromptWith,
+  BLOCKED_LINE,
+  SYSTEM_PROMPT,
+  WRITING_TOOLS,
+} from './shared.js';
 export { createFakeAgent, FAKE_MODES, isFakeMode, type FakeMode, type FakeAgentOptions } from './fake.js';
 export {
   claudeCredentials,

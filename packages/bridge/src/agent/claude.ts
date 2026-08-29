@@ -4,7 +4,8 @@ import type {
   PermissionResult,
   query as sdkQuery,
 } from '@anthropic-ai/claude-agent-sdk';
-import { blocked, BLOCKED_PREFIX, type AgentContext, type AgentOutcome, type AgentRunner } from './types.js';
+import { pathOf, refusalIn, systemPromptWith, WRITING_TOOLS } from './shared.js';
+import { blocked, type AgentContext, type AgentOutcome, type AgentRunner } from './types.js';
 
 /* ── the seam ─────────────────────────────────────────────────────────────── */
 
@@ -64,9 +65,6 @@ export const CLAUDE_TOOLS = ['Read', 'Edit'] as const;
 /** Read the file, write one line, say so. Anything longer is the agent lost. */
 export const CLAUDE_MAX_TURNS = 12;
 
-/** Tool names whose use means something was written. */
-const WRITING_TOOLS = new Set(['Edit', 'MultiEdit', 'NotebookEdit', 'Write']);
-
 /**
  * A credential the SDK can actually authenticate with. Checked here so that
  * `SVE_AGENT=claude` on a machine with no key fails by naming what is missing,
@@ -78,20 +76,18 @@ export const CLAUDE_CREDENTIAL_ENV = [
   'CLAUDE_CODE_OAUTH_TOKEN',
 ] as const;
 
-const SYSTEM_PROMPT = [
-  'You are the writing half of a source-mapped visual editor.',
-  '',
-  'The element to change has already been located. Every request names the file, the',
-  'line and the column that the build stamped into the source, and quotes the source',
-  'around it as it is on disk right now.',
-  '',
-  'So: do not search. Do not look for a better place to make the change, do not open a',
-  'file you were not given, and do not widen the edit to tidy anything up. Read the',
-  'named file, apply the one described change with Edit, and stop.',
-  '',
-  'Reply `DONE` once the edit is written, or `BLOCKED: <reason>` if it cannot be made',
-  'as described. Those are the only two replies that mean anything downstream.',
-].join('\n');
+/**
+ * {@link SYSTEM_PROMPT} with the one paragraph that is this runner's alone.
+ *
+ * The shared contract deliberately names no tool, because the tools differ per
+ * provider. `Read` and `Edit` are what this runner grants, and they are named
+ * here rather than in the shared text so a second runner naming its own tools
+ * does not have to disagree with a sentence it inherited.
+ */
+const CLAUDE_SYSTEM_PROMPT = systemPromptWith(
+  'The tools you have are `Read` and `Edit`, and nothing else. Read the named file, ' +
+    'apply the one described change with `Edit`, and stop.',
+);
 
 /* ── reading the stream ───────────────────────────────────────────────────── */
 
@@ -132,33 +128,6 @@ function read(message: AgentStreamMessage): Spoken {
     }
   }
   return spoken;
-}
-
-/** The path a tool call names, under any of the keys the built-in tools use. */
-function pathOf(input: Record<string, unknown>): string | undefined {
-  for (const key of ['file_path', 'path', 'notebook_path']) {
-    const value = input[key];
-    if (typeof value === 'string' && value.length > 0) return value;
-  }
-  return undefined;
-}
-
-/**
- * The refusal, if the agent gave one.
- *
- * Anchored to the start of a line: the prompt asks for `BLOCKED: <reason>` and
- * nothing else, and an agent that merely *mentions* being blocked in prose has
- * not refused. Guessing a refusal out of prose would turn a successful edit into
- * a reported failure, which is the same lie as the reverse.
- */
-const BLOCKED_LINE = /^\s*BLOCKED:[ \t]*(.+)$/m;
-
-function refusalIn(replies: readonly string[]): string | null {
-  for (const reply of [...replies].reverse()) {
-    const found = BLOCKED_LINE.exec(reply);
-    if (found) return found[1]!.trim();
-  }
-  return null;
 }
 
 /* ── the runner ───────────────────────────────────────────────────────────── */
@@ -226,7 +195,7 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentRunner
         // permission rule sitting on a developer's machine must not be able to
         // widen what this runner may do.
         settingSources: [],
-        systemPrompt: SYSTEM_PROMPT,
+        systemPrompt: CLAUDE_SYSTEM_PROMPT,
         cwd: ctx.root,
         maxTurns,
         abortController: controller,

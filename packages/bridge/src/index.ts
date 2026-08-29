@@ -79,3 +79,11 @@ export {
   type ToolPermission,
 } from './agent/index.js';
 export { blocked, BLOCKED_PREFIX } from './agent/types.js';
+export {
+  pathOf,
+  refusalIn,
+  systemPromptWith,
+  BLOCKED_LINE,
+  SYSTEM_PROMPT,
+  WRITING_TOOLS,
+} from './agent/shared.js';
