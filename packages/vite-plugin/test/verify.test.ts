@@ -1,4 +1,9 @@
-// @vitest-environment jsdom
+/**
+ * No `@vitest-environment jsdom` here, and that is the assertion AC-8.2 is really making:
+ * once `resolveAnchor` became `currentLoc`, the loop imports no DOM constant and touches
+ * no node, so its specs run in plain Node. A regression would not fail subtly — the file
+ * would stop loading.
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditIntent, EditResult, Snapshot } from '@sve/protocol';
 import type { Override } from '@sve/overlay';
@@ -67,19 +72,17 @@ function makeTarget(options: {
   const phases: string[] = [];
   if (options.override) overrides.set(EID, options.override);
 
-  const element = document.createElement('h1');
-  element.setAttribute('data-sve-eid', EID);
-  element.setAttribute('data-sve-loc', options.loc ?? 'src/components/Hero.tsx:17:11');
-
   return {
     calls,
     overrides,
     verdicts,
     phases,
 
-    resolveAnchor: () => {
-      calls.push('resolveAnchor');
-      return options.rendered === null ? null : element;
+    currentLoc: () => {
+      calls.push('currentLoc');
+      // `rendered: null` is an element hot reload never brought back, and a loc is the
+      // only thing the loop ever wanted off it.
+      return options.rendered === null ? null : (options.loc ?? 'src/components/Hero.tsx:17:11');
     },
 
     readSnapshot: () => {
@@ -241,7 +244,7 @@ describe('runVerification', () => {
     expect(read).toBeGreaterThan(lift);
     // And the re-anchor comes before both, because the element the loop reads has to be
     // the one hot reload just put on the page.
-    expect(target.calls.indexOf('resolveAnchor')).toBeLessThan(lift);
+    expect(target.calls.indexOf('currentLoc')).toBeLessThan(lift);
   });
 
   it('reports landed and leaves the override lifted', async () => {
