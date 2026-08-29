@@ -1,4 +1,10 @@
-import { parseLoc, TRACKED_PROPS, type EditIntent, type TrackedProp } from '@sve/protocol';
+import {
+  parseLoc,
+  TRACKED_PROPS,
+  type EditIntent,
+  type Mismatch,
+  type TrackedProp,
+} from '@sve/protocol';
 import { splitLines } from './source.js';
 
 export const PROMPT_CONTEXT_LINES = 4;
@@ -108,5 +114,50 @@ export function buildPrompt(args: BuildPromptArgs): string {
     `  4. If the element at line ${loc.line} is not what is described above, write nothing`,
     '     at all and reply exactly `BLOCKED: <reason>`.',
     '  5. When the edit is written, reply `DONE` and nothing else.',
+  ].join('\n');
+}
+
+export interface BuildRetryPromptArgs {
+  /** The prompt {@link buildPrompt} produced for this attempt, from source read now. */
+  prompt: string;
+  /** What the overlay recorded after hot reload: intent on one side, rendered on the other. */
+  mismatch: readonly Mismatch[];
+}
+
+/**
+ * The follow-up prompt for a retry (AC-6.5).
+ *
+ * A retry is not the same question asked twice. The agent already answered it,
+ * its answer reached the file, the page re-rendered from that file, and the
+ * result was compared to what the user asked for — so the one thing worth
+ * saying is what its own edit actually produced. Sending the original prompt
+ * again would ask an agent that has no memory of having answered, and would
+ * invite it to write the same thing a second time.
+ *
+ * The excerpt inside `prompt` is re-read at job time, so it already shows the
+ * file as the previous attempt left it, at whatever line the element now sits on.
+ */
+export function buildRetryPrompt(args: BuildRetryPromptArgs): string {
+  const rows =
+    args.mismatch.length > 0
+      ? args.mismatch.map(
+          (entry) =>
+            `  ${entry.prop}: asked for ${quote(entry.intent)}, ` +
+            `the page rendered ${quote(entry.rendered)}`,
+        )
+      : ['  (the difference was not recorded)'];
+
+  return [
+    args.prompt,
+    '',
+    'This is a retry of your previous edit.',
+    '',
+    'That edit was written to this file, the page was re-rendered from it, and the',
+    'result did not match what was asked:',
+    '',
+    ...rows,
+    '',
+    'The excerpt above is the file as your previous edit left it. Correct it, under',
+    'the same rules — one element, no other line, no other file.',
   ].join('\n');
 }

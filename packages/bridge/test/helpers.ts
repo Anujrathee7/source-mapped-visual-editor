@@ -5,6 +5,7 @@ import { parseLoc, type EditIntent } from '@sve/protocol';
 import type {
   AgentContext,
   AgentProgress,
+  AgentRetry,
   AgentToolRequest,
   ToolPermission,
 } from '../src/agent/types.js';
@@ -195,6 +196,7 @@ export function makeAgentContext(options: {
   editRoots?: readonly string[];
   jobId?: string;
   fs?: BridgeFs;
+  retry?: AgentRetry;
   canUseTool?: (request: AgentToolRequest) => Promise<ToolPermission>;
 }): TestAgentContext {
   const intent = options.intent ?? makeIntent();
@@ -209,6 +211,7 @@ export function makeAgentContext(options: {
     root: options.root,
     editRoots: options.editRoots ?? [options.root],
     prompt: 'prompt withheld: this context exercises runner behaviour, not prompt text',
+    ...(options.retry ? { retry: options.retry } : {}),
     fs: options.fs ?? nodeFs,
     signal: new AbortController().signal,
     async canUseTool(request) {

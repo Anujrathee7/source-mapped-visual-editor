@@ -1,4 +1,4 @@
-import type { EditIntent, Loc, ProgressPhase } from '@sve/protocol';
+import type { EditIntent, Loc, Mismatch, ProgressPhase } from '@sve/protocol';
 import type { BridgeFs } from '../fs.js';
 
 /**
@@ -27,6 +27,23 @@ export interface AgentProgress {
   tool?: string;
 }
 
+/**
+ * What makes an attempt a *retry* rather than a fresh job (AC-6.5).
+ *
+ * The mismatch is the overlay's own recording — intent on one side, what the
+ * page rendered after hot reload on the other. It is passed through rather than
+ * re-derived here: the comparison that produced it is the verifier's, and the
+ * bridge taking a second opinion on what "differs" would be a second comparator.
+ *
+ * `sessionId` is the session the previous attempt ran in, so a runner that has
+ * sessions can continue that conversation instead of starting one that has no
+ * memory of having answered.
+ */
+export interface AgentRetry {
+  readonly sessionId?: string;
+  readonly mismatch: readonly Mismatch[];
+}
+
 export interface AgentContext {
   readonly jobId: string;
   readonly intent: EditIntent;
@@ -38,6 +55,8 @@ export interface AgentContext {
   readonly editRoots: readonly string[];
   /** Built by the bridge from source read fresh at job time. */
   readonly prompt: string;
+  /** Present only when this attempt follows one that drifted (AC-6.5). */
+  readonly retry?: AgentRetry;
   readonly fs: BridgeFs;
   /** Aborted when the bridge is closed; a long-running runner should honour it. */
   readonly signal: AbortSignal;

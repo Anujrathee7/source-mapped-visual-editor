@@ -10,14 +10,18 @@ import {
   type AgentStreamMessage,
   type SdkQuery,
 } from '../src/agent/claude.js';
-import type { AgentContext } from '../src/agent/types.js';
+import type { AgentContext, AgentRunner } from '../src/agent/types.js';
+import { createBridge } from '../src/bridge.js';
 import { agentRunnerNames, resolveAgentRunner } from '../src/agent/index.js';
 import { permitPath } from '../src/guard.js';
 import { buildRetryPrompt } from '../src/prompt.js';
 import {
   cleanupTempDirs,
+  HERO_H1_COL,
+  HERO_H1_LINE,
   HERO_SOURCE,
   makeAgentContext,
+  makeIntent,
   makeProject,
   makeTempDir,
 } from './helpers.js';
@@ -439,6 +443,34 @@ describe('AC-6.5 a retry', () => {
     await createClaudeAgent({ query: spy.query }).run(ctx);
 
     expect(spy.options().resume).toBeUndefined();
+  });
+
+  it('is threaded by the bridge, which fills in the session the caller never saw', async () => {
+    const { root, file, rel } = makeProject();
+    const seen: AgentContext[] = [];
+    const agent: AgentRunner = {
+      name: 'stub',
+      requiresNetwork: false,
+      async run(ctx) {
+        seen.push(ctx);
+        await ctx.fs.writeFile(ctx.file, Buffer.from(`${ctx.jobId}\n`, 'utf8'));
+        return { kind: 'edited', files: [ctx.file], sessionId: 'session_from_job_one' };
+      },
+    };
+    const bridge = createBridge({ root, agent, undoRoot: path.join(root, '.sve-undo') });
+    const intent = makeIntent({ loc: `${rel.replace(/\\/g, '/')}:${HERO_H1_LINE}:${HERO_H1_COL}` });
+
+    await bridge.apply({ intents: [intent] });
+    await bridge.apply({ intents: [intent] }, { retry: { mismatch } });
+    bridge.close();
+
+    expect(seen[0]!.retry).toBeUndefined();
+    // The browser never sees a session id — it is dropped at the wire — so the
+    // bridge remembers it per element and hands it back on the retry.
+    expect(seen[1]!.retry?.sessionId).toBe('session_from_job_one');
+    expect(seen[1]!.prompt).toContain('Ship Faster');
+    expect(seen[1]!.prompt).toContain('retry');
+    expect(readFileSync(file).toString('utf8')).toContain(seen[1]!.jobId);
   });
 
   it('carries the recorded mismatch — intent versus rendered — in the prompt', () => {

@@ -8,12 +8,12 @@ import {
   type ProgressPhase,
 } from '@sve/protocol';
 import { resolveAgentRunner } from './agent/index.js';
-import type { AgentEnv, AgentRunner } from './agent/types.js';
+import type { AgentEnv, AgentRetry, AgentRunner } from './agent/types.js';
 import { lineDiff } from './diff.js';
 import { nodeFs, type BridgeFs } from './fs.js';
-import { denialMessage, isInsideEditRoots } from './guard.js';
+import { denialMessage, isInsideEditRoots, permitPath } from './guard.js';
 import { ProgressHub } from './progress.js';
-import { buildPrompt } from './prompt.js';
+import { buildPrompt, buildRetryPrompt } from './prompt.js';
 import { SerialQueue } from './queue.js';
 import { SnapshotStore } from './snapshot.js';
 
@@ -31,6 +31,18 @@ export interface BridgeOptions {
   undoRoot?: string;
 }
 
+export interface ApplyOptions {
+  /**
+   * Marks this request as a second attempt at an edit that drifted (AC-6.5).
+   *
+   * The mismatch is the overlay's own recording, passed through untouched. When
+   * `sessionId` is omitted the bridge fills in the session the previous job for
+   * this element ran in, so a caller that never saw the id still gets a resumed
+   * conversation rather than a stranger asked the same question twice.
+   */
+  retry?: AgentRetry;
+}
+
 export interface Bridge {
   readonly root: string;
   readonly editRoots: readonly string[];
@@ -39,7 +51,7 @@ export interface Bridge {
   readonly progress: ProgressHub;
   readonly snapshots: SnapshotStore;
   /** One job per intent; resolves when every one of them has settled. */
-  apply(request: ApplyRequest): Promise<EditResult[]>;
+  apply(request: ApplyRequest, options?: ApplyOptions): Promise<EditResult[]>;
   revert(jobId: string): Promise<EditResult>;
   close(): void;
 }
@@ -70,15 +82,21 @@ export function createBridge(options: BridgeOptions): Bridge {
     emit({ jobId, phase, ...(detail ? { detail } : {}), ...(tool ? { tool } : {}) });
   }
 
-  async function permit(target: string | undefined) {
-    if (target === undefined) return { behavior: 'allow' } as const;
-    const resolved = path.isAbsolute(target) ? target : path.resolve(root, target);
-    return (await isInsideEditRoots(resolved, editRoots, fs))
-      ? ({ behavior: 'allow' } as const)
-      : ({ behavior: 'deny', message: denialMessage(resolved, editRoots) } as const);
-  }
+  /**
+   * The session each element was last edited in, so a retry can resume it.
+   *
+   * Keyed by `eid` rather than by loc: the loc moves every time the agent's own
+   * write shifts a line, and the whole point of carrying a structural id is that
+   * it does not (AC-1.3). Process-local and unbounded only by how many distinct
+   * elements one dev session edits.
+   */
+  const sessions = new Map<string, string>();
 
-  async function runJob(jobId: string, intent: EditIntent): Promise<EditResult> {
+  async function runJob(
+    jobId: string,
+    intent: EditIntent,
+    retry: AgentRetry | undefined,
+  ): Promise<EditResult> {
     try {
       const loc = parseLoc(intent.loc);
       if (loc === null) {
@@ -99,7 +117,17 @@ export function createBridge(options: BridgeOptions): Bridge {
       // Fresh at job time. The queue is serial precisely so this read reflects
       // every write that came before it, and never a copy taken at enqueue time.
       const source = await fs.readFile(file);
-      const prompt = buildPrompt({ intent, source, contextLines: options.contextLines });
+      const fresh = buildPrompt({ intent, source, contextLines: options.contextLines });
+
+      // A retry is not the same question asked twice: the excerpt above already
+      // shows what the previous attempt wrote, and the agent is told what that
+      // produced rather than being asked again with no memory of answering.
+      const attempt: AgentRetry | undefined = retry
+        ? { ...retry, sessionId: retry.sessionId ?? sessions.get(intent.eid) }
+        : undefined;
+      const prompt = attempt
+        ? buildRetryPrompt({ prompt: fresh, mismatch: attempt.mismatch })
+        : fresh;
 
       announce(jobId, 'agent', agent.name);
 
@@ -112,9 +140,10 @@ export function createBridge(options: BridgeOptions): Bridge {
         root,
         editRoots,
         prompt,
+        ...(attempt ? { retry: attempt } : {}),
         fs,
         signal: lifetime.signal,
-        canUseTool: (request) => permit(request.path),
+        canUseTool: (request) => permitPath(request.path, { root, editRoots, fs }),
         report(update) {
           const phase = update.phase ?? 'agent';
           if (phase === 'writing') sawWriting = true;
@@ -126,6 +155,8 @@ export function createBridge(options: BridgeOptions): Bridge {
           });
         },
       });
+
+      if (outcome.sessionId) sessions.set(intent.eid, outcome.sessionId);
 
       switch (outcome.kind) {
         case 'edited': {
@@ -174,14 +205,14 @@ export function createBridge(options: BridgeOptions): Bridge {
     progress,
     snapshots,
 
-    async apply(request) {
+    async apply(request, applyOptions) {
       const pending = request.intents.map((intent) => {
         const jobId = newJobId();
         // Announced at enqueue, so a client watching already knows the job
         // exists while it is still waiting its turn behind another.
         announce(jobId, 'queued', intent.loc);
         return queue
-          .enqueue(() => runJob(jobId, intent))
+          .enqueue(() => runJob(jobId, intent, applyOptions?.retry))
           .catch((error: unknown): EditResult => ({ jobId, status: 'error', message: message(error) }));
       });
       return Promise.all(pending);

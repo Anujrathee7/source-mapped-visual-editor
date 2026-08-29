@@ -6,10 +6,10 @@
  * streams progress back. It holds file-write capability, so it must never be
  * imported by browser code: mount it through Vite's `configureServer`.
  */
-export { createBridge, type Bridge, type BridgeOptions } from './bridge.js';
+export { createBridge, type ApplyOptions, type Bridge, type BridgeOptions } from './bridge.js';
 export { lineDiff } from './diff.js';
 export { nodeFs, type BridgeFs, type FileStats } from './fs.js';
-export { denialMessage, isInsideEditRoots } from './guard.js';
+export { denialMessage, isInsideEditRoots, permitPath, type PermitOptions } from './guard.js';
 export {
   createBridgeMiddleware,
   sveBridge,
@@ -26,7 +26,13 @@ export {
   type ViteDevServerLike,
 } from './middleware.js';
 export { ProgressHub, type ProgressListener } from './progress.js';
-export { buildPrompt, PROMPT_CONTEXT_LINES, type BuildPromptArgs } from './prompt.js';
+export {
+  buildPrompt,
+  buildRetryPrompt,
+  PROMPT_CONTEXT_LINES,
+  type BuildPromptArgs,
+  type BuildRetryPromptArgs,
+} from './prompt.js';
 export { SerialQueue } from './queue.js';
 export {
   SnapshotStore,
@@ -38,7 +44,14 @@ export { joinLines, splitLines, type SourceLine } from './source.js';
 
 export {
   agentRunnerNames,
+  claudeCredentials,
+  createClaudeAgent,
   createFakeAgent,
+  missingCredentialMessage,
+  CLAUDE_CREDENTIAL_ENV,
+  CLAUDE_MAX_TURNS,
+  CLAUDE_MODEL,
+  CLAUDE_TOOLS,
   DEFAULT_AGENT,
   FAKE_MODES,
   isFakeMode,
@@ -51,12 +64,16 @@ export {
   type AgentNoop,
   type AgentOutcome,
   type AgentProgress,
+  type AgentRetry,
   type AgentRunner,
   type AgentRunnerFactory,
   type AgentRunnerOptions,
+  type AgentStreamMessage,
   type AgentToolRequest,
+  type ClaudeAgentOptions,
   type FakeAgentOptions,
   type FakeMode,
+  type SdkQuery,
   type ToolPermission,
 } from './agent/index.js';
 export { blocked, BLOCKED_PREFIX } from './agent/types.js';

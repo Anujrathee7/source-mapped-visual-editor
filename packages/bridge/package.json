@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.251",
     "@sve/protocol": "*",
     "zod": "^3.24.1"
   }

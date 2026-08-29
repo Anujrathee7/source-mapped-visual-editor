@@ -172,8 +172,14 @@ describe('resolveAgentRunner', () => {
     );
   });
 
-  it('reports that the real runner is not wired up yet, naming the milestone', () => {
-    expect(() => resolveAgentRunner({ SVE_AGENT: 'claude' })).toThrow(/M7/);
+  // Was "the real runner is not wired up yet, naming the milestone". It is now
+  // wired up, so what a bare `SVE_AGENT=claude` is missing is the credential —
+  // see test/claude-agent.test.ts for the rest of AC-6.1.
+  it('selects the live runner, and names the credential when there is none', () => {
+    expect(resolveAgentRunner({ SVE_AGENT: 'claude', ANTHROPIC_API_KEY: 'sk-ant-test' }).name).toBe(
+      'claude',
+    );
+    expect(() => resolveAgentRunner({ SVE_AGENT: 'claude' })).toThrow(/ANTHROPIC_API_KEY/);
   });
 
   it('rejects an unknown runner name', () => {

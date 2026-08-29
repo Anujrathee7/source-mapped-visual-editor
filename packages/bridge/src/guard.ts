@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { ToolPermission } from './agent/types.js';
 import { nodeFs, type BridgeFs } from './fs.js';
 
 /**
@@ -101,4 +102,34 @@ export function denialMessage(candidate: string, editRoots: readonly string[]): 
     `(${editRoots.join(', ') || 'none'}). Write nothing and reply ` +
     `BLOCKED: <reason>.`
   );
+}
+
+export interface PermitOptions {
+  /** Relative paths resolve against this, exactly as the agent's `cwd` does. */
+  root: string;
+  editRoots: readonly string[];
+  fs?: BridgeFs;
+}
+
+/**
+ * The same decision as {@link isInsideEditRoots}, in the shape a tool call wants.
+ *
+ * The bridge's own `canUseTool` and the live runner's SDK callback both come
+ * through here, so there is exactly one place in this codebase that decides
+ * whether a path may be touched (AC-6.3) — and one place that spells the
+ * refusal, so the agent is told the same thing either way.
+ *
+ * A tool call naming no path is allowed: it is not reaching for the filesystem,
+ * and inventing a denial for it would only teach the agent that refusals are
+ * noise to be worked around.
+ */
+export async function permitPath(
+  target: string | undefined,
+  options: PermitOptions,
+): Promise<ToolPermission> {
+  if (target === undefined) return { behavior: 'allow' };
+  const resolved = path.isAbsolute(target) ? target : path.resolve(options.root, target);
+  return (await isInsideEditRoots(resolved, options.editRoots, options.fs ?? nodeFs))
+    ? { behavior: 'allow' }
+    : { behavior: 'deny', message: denialMessage(resolved, options.editRoots) };
 }
