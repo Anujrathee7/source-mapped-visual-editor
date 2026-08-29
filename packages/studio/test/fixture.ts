@@ -27,6 +27,10 @@ export const SECTION_LOC = `${FILE}:2:3`;
 export const H1_LOC = `${FILE}:3:5`;
 export const P_LOC = `${FILE}:6:5`;
 
+/** An element whose file the fixture refuses to serve, so the unreadable path is real. */
+export const ORPHAN_EID = 'src/Missing.tsx#Missing/div:0';
+export const ORPHAN_LOC = 'src/Missing.tsx:2:3';
+
 export const H1_ANCHOR = { eid: H1_EID, eidIndex: 0 };
 
 export const PAGE = `
@@ -34,6 +38,7 @@ export const PAGE = `
   <section data-sve-loc="${SECTION_LOC}" data-sve-eid="${SECTION_EID}" data-sve-text="none" data-sve-class="literal" class="wrap">
     <h1 data-sve-loc="${H1_LOC}" data-sve-eid="${H1_EID}" data-sve-text="static" data-sve-class="literal" class="title">Swim today</h1>
     <p data-sve-loc="${P_LOC}" data-sve-eid="${P_EID}" data-sve-text="dynamic" data-sve-class="dynamic" class="copy">Next safe window 06:40</p>
+    <div data-sve-loc="${ORPHAN_LOC}" data-sve-eid="${ORPHAN_EID}" data-sve-text="static" data-sve-class="literal" class="orphan">elsewhere</div>
   </section>
 </main>`;
 

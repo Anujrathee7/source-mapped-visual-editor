@@ -20,6 +20,7 @@ import {
   H1_ANCHOR,
   H1_EID,
   H1_LOC,
+  ORPHAN_EID,
   P_EID,
   SECTION_EID,
   SOURCE,
@@ -122,12 +123,11 @@ describe('the diagnostic', () => {
 
   it('says so when the source cannot be read, rather than drawing an empty strip', async () => {
     wire = await wirePreview();
-    await wire.controller.select({ eid: P_EID, eidIndex: 0 });
+    await wire.controller.select({ eid: ORPHAN_EID, eidIndex: 0 });
     await settle();
-    // The fixture serves only `src/Hero.tsx`; the paragraph's loc is in it, so read one
-    // that is not by re-anchoring is out of scope here — instead the paragraph is fine and
-    // the unreadable case is driven through a file the fixture refuses.
-    expect(wire.controller.state?.excerpt).not.toBeNull();
+
+    expect(wire.controller.state?.excerpt).toBeNull();
+    expect(wire.controller.state?.sourceMessage).toMatch(/Source unavailable/);
   });
 });
 

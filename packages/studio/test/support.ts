@@ -8,13 +8,8 @@
  * the stub.
  */
 import { mountOverlay, type OverlayHandle } from '@sve/overlay';
-import {
-  createRpcClient,
-  createTransportPair,
-  type MemoryTransport,
-  type RpcClient,
-} from '@sve/rpc';
-import { createPreviewController, type PreviewController } from '../src/client/preview.js';
+import { createTransportPair, type MemoryTransport, type RpcClient } from '@sve/rpc';
+import { connectPreview, type PreviewController } from '../src/client/preview.js';
 import { createPreviewServer, type PreviewServer } from '../src/preview/serve.js';
 import { PREVIEW_ORIGIN, STUDIO_ORIGIN, fetchFixtureSource, renderPage, settle } from './fixture.js';
 
@@ -51,6 +46,17 @@ export async function wirePreview(options: WireOptions = {}): Promise<Wire> {
 
   let settled = options.settled ?? true;
 
+  // The studio's side first: a frame that announced itself before anyone was listening is
+  // a handshake nobody completes, and that is the order the real thing runs in too.
+  const link = connectPreview({
+    transport: studioTransport,
+    peerOrigin: PREVIEW_ORIGIN,
+    peerSource: previewWindow,
+    timeoutMs: options.timeoutMs ?? 200,
+    watchTimeoutMs: 50,
+  });
+  const { client, controller } = link;
+
   const preview = createPreviewServer({
     overlay,
     transport: previewTransport,
@@ -60,14 +66,6 @@ export async function wirePreview(options: WireOptions = {}): Promise<Wire> {
     watchForUpdate: async () => settled,
   });
 
-  const client = createRpcClient({
-    transport: studioTransport,
-    peerOrigin: PREVIEW_ORIGIN,
-    peerSource: previewWindow,
-    timeoutMs: options.timeoutMs ?? 200,
-  });
-
-  const controller = createPreviewController({ client });
   await settle();
 
   return {
@@ -81,8 +79,7 @@ export async function wirePreview(options: WireOptions = {}): Promise<Wire> {
       settled = value;
     },
     dispose: () => {
-      controller.dispose();
-      client.dispose();
+      link.dispose();
       preview.dispose();
       overlay.unmount();
       document.body.innerHTML = '';
