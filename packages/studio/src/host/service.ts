@@ -28,6 +28,7 @@ import {
   type GitRunner,
   type SessionStatus,
 } from '@sve/host';
+import type { HttpClient } from '@sve/bridge';
 import { EditResultSchema, type EditIntent, type EditResult } from '@sve/protocol';
 import {
   isRepositoryRequest,
@@ -39,6 +40,8 @@ import {
 import type { PlanRequest, PlanResult, Planner } from '../plan.js';
 import type { ProviderId, ProviderSettings, ProviderView } from '../providers.js';
 import { createFakePlanner } from './planner-fake.js';
+import { createClaudePlanner } from './planner-claude.js';
+import { createOpenAiPlanner } from './planner-openai.js';
 import { createProviderStore, type ProviderStore } from './providers.js';
 
 export const APPLY_PATH = '__sve/apply';
@@ -63,7 +66,9 @@ export interface StudioServiceOptions {
   probe?: boolean;
   confirmTimeoutMs?: number;
   fetch?: typeof fetch;
-  /** Overridden by a test, and by a provider that has a real planner. */
+  /** The planners' transport. Injected for the same reason the runners' is (AC-10.7). */
+  http?: HttpClient;
+  /** Overrides the choice below wholesale. Tests only. */
   planner?: (id: ProviderId, settings: ProviderSettings) => Planner;
   newId?: () => string;
 }
@@ -115,7 +120,28 @@ export function createStudioService(options: StudioServiceOptions): StudioServic
   const providers: ProviderStore = createProviderStore();
   const doFetch = options.fetch ?? globalThis.fetch;
   const confirmTimeoutMs = options.confirmTimeoutMs ?? DEFAULT_CONFIRM_TIMEOUT_MS;
-  const buildPlanner = options.planner ?? (() => createFakePlanner());
+  /**
+   * The planner follows the picker.
+   *
+   * The same three providers, and the same rule: nothing reaches the network because a
+   * page loaded. `fake` is the default and needs no credential; the other two are one HTTP
+   * request each, with no tools, because a planner produces an override and an override is
+   * an illusion — it must not be able to reach a file even in principle.
+   */
+  const http: HttpClient =
+    options.http ??
+    (async (url, init) => {
+      const response = await doFetch(url, init as RequestInit);
+      return { ok: response.ok, status: response.status, text: () => response.text() };
+    });
+
+  const buildPlanner =
+    options.planner ??
+    ((id: ProviderId, settings: ProviderSettings): Planner => {
+      if (id === 'openai') return createOpenAiPlanner(settings, http);
+      if (id === 'claude') return createClaudePlanner(settings, http);
+      return createFakePlanner();
+    });
 
   let counter = 0;
   const nextId = options.newId ?? (() => `c_${(counter += 1).toString(36)}`);

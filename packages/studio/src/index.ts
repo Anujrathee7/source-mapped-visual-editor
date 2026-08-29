@@ -56,6 +56,17 @@ export {
 
 export { createFakePlanner } from './host/planner-fake.js';
 export {
+  PLAN_SYSTEM_PROMPT,
+  parsePlanReply,
+  planPrompt,
+} from './host/plan-prompt.js';
+export { createOpenAiPlanner } from './host/planner-openai.js';
+export {
+  ANTHROPIC_MESSAGES_URL,
+  ANTHROPIC_VERSION,
+  createClaudePlanner,
+} from './host/planner-claude.js';
+export {
   createProviderStore,
   envFor,
   missingSettingFor,
