@@ -104,7 +104,15 @@ export const BLOCKED_PREFIX = 'BLOCKED: ';
 
 export function blocked(reason: string, sessionId?: string): AgentBlocked {
   const trimmed = reason.startsWith(BLOCKED_PREFIX) ? reason.slice(BLOCKED_PREFIX.length) : reason;
-  return { kind: 'blocked', reason: trimmed, message: `${BLOCKED_PREFIX}${trimmed}`, sessionId };
+  return {
+    kind: 'blocked',
+    reason: trimmed,
+    message: `${BLOCKED_PREFIX}${trimmed}`,
+    // Omitted, not set to undefined: a session-less runner returns no session
+    // id at all (AC-10.5), and "the key is there but empty" is a different
+    // claim from "there was never a session" to anything that inspects it.
+    ...(sessionId !== undefined ? { sessionId } : {}),
+  };
 }
 
 export interface AgentRunner {
