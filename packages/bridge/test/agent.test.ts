@@ -8,8 +8,12 @@ afterAll(cleanupTempDirs);
 
 // AC-3.5
 describe('the fake agent', () => {
+  // "at least four modes". M6 added two more to prove the verifier with; see
+  // test/fake-modes.test.ts.
   it('offers the four scripted modes', () => {
-    expect([...FAKE_MODES].sort()).toEqual(['blocked', 'correct', 'noop', 'wrong']);
+    for (const mode of ['blocked', 'correct', 'noop', 'wrong'] as const) {
+      expect(FAKE_MODES).toContain(mode);
+    }
   });
 
   it('correct — applies the intent exactly as asked', async () => {
@@ -109,7 +113,7 @@ describe('the fake agent', () => {
     expect(Buffer.compare(readFileSync(file), HERO_SOURCE)).toBe(0);
   });
 
-  it('blocks rather than guesses when the target line is not what was described', async () => {
+  it('blocks rather than guesses when the target element is not what was described', async () => {
     const { root, file } = makeProject();
     const intent = makeIntent({
       before: { text: 'Something else entirely', classes: [], computed: {} },

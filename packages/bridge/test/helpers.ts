@@ -26,12 +26,43 @@ export const HERO_SOURCE_LINES = [
   '}',
 ];
 
+export const CRLF = String.fromCharCode(13, 10);
+
 /** CRLF everywhere, including a terminator on the final line. */
-export const HERO_SOURCE = Buffer.from(HERO_SOURCE_LINES.join('\r\n') + '\r\n', 'utf8');
+export const HERO_SOURCE = Buffer.from(HERO_SOURCE_LINES.join(CRLF) + CRLF, 'utf8');
 
 /** The `<h1>` above: line 4, column 7 (1-based, as the Babel stamp emits). */
 export const HERO_H1_LINE = 4;
 export const HERO_H1_COL = 7;
+
+/**
+ * A second fixture, shaped the way `apps/demo` actually is.
+ *
+ * Every heading in the demo is formatted like this `<h2>`: the stamp lands on the opening
+ * line, the `className` is on the next one, and the text three lines further down. It is
+ * deliberately separate from {@link HERO_SOURCE} so that AC-3.7's excerpt assertions keep
+ * asserting against the file they were written for.
+ */
+export const METHOD_SOURCE_LINES = [
+  'export function Method() {',
+  '  return (',
+  '    <section className="method">',
+  '      <h2',
+  '        className="text-3xl text-kelp"',
+  '        id="how"',
+  '      >',
+  '        How we call it',
+  '      </h2>',
+  '    </section>',
+  '  );',
+  '}',
+];
+
+export const METHOD_SOURCE = Buffer.from(METHOD_SOURCE_LINES.join(CRLF) + CRLF, 'utf8');
+
+/** The `<h2>` above: line 4, column 7 — and nothing it needs edited is on that line. */
+export const METHOD_H2_LINE = 4;
+export const METHOD_H2_COL = 7;
 
 const created: string[] = [];
 
@@ -49,6 +80,16 @@ export function makeProject(): { root: string; file: string; rel: string } {
   const rel = path.join('src', 'Hero.tsx');
   const file = path.join(root, rel);
   writeFileSync(file, HERO_SOURCE);
+  return { root, file, rel };
+}
+
+/** A project root containing `src/Method.tsx` with {@link METHOD_SOURCE}. */
+export function makeSpanningProject(): { root: string; file: string; rel: string } {
+  const root = makeTempDir('sve-project-');
+  mkdirSync(path.join(root, 'src'));
+  const rel = path.join('src', 'Method.tsx');
+  const file = path.join(root, rel);
+  writeFileSync(file, METHOD_SOURCE);
   return { root, file, rel };
 }
 
@@ -74,6 +115,35 @@ export function makeIntent(overrides: Partial<EditIntent> = {}): EditIntent {
     before: { text: 'Swim today', classes: ['text-5xl', 'font-bold'], computed },
     after: { text: 'Ship faster', classes: ['text-5xl', 'font-bold'], computed },
     instruction: 'Replace the heading text with "Ship faster".',
+    ...overrides,
+  };
+}
+
+const methodComputed = {
+  color: 'rgb(12, 97, 82)',
+  fontSize: '30px',
+  fontWeight: '400',
+};
+
+/** An intent against the multi-line `<h2>` of {@link METHOD_SOURCE}. */
+export function makeSpanningIntent(overrides: Partial<EditIntent> = {}): EditIntent {
+  return {
+    eid: 'Method.tsx#Method/section:0/h2:0',
+    eidIndex: 0,
+    loc: `src/Method.tsx:${METHOD_H2_LINE}:${METHOD_H2_COL}`,
+    tag: 'h2',
+    kind: 'text',
+    before: {
+      text: 'How we call it',
+      classes: ['text-3xl', 'text-kelp'],
+      computed: methodComputed,
+    },
+    after: {
+      text: 'How we decide',
+      classes: ['text-3xl', 'text-kelp'],
+      computed: methodComputed,
+    },
+    instruction: 'Replace the heading text with "How we decide".',
     ...overrides,
   };
 }
