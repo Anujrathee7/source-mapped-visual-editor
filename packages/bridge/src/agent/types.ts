@@ -57,6 +57,13 @@ export interface AgentContext {
   readonly prompt: string;
   /** Present only when this attempt follows one that drifted (AC-6.5). */
   readonly retry?: AgentRetry;
+  /**
+   * Guarded (AC-7.1): every member checks `isInsideEditRoots` before delegating,
+   * reads included, and rejects with a `PathNotPermittedError` otherwise. Asking
+   * {@link AgentContext.canUseTool} first is still the courteous path — a refusal
+   * answered there becomes a clean `blocked` instead of an exception mid-edit —
+   * but it is no longer what makes the boundary hold.
+   */
   readonly fs: BridgeFs;
   /** Aborted when the bridge is closed; a long-running runner should honour it. */
   readonly signal: AbortSignal;

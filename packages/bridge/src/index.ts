@@ -10,6 +10,7 @@ export { createBridge, type ApplyOptions, type Bridge, type BridgeOptions } from
 export { lineDiff } from './diff.js';
 export { nodeFs, type BridgeFs, type FileStats } from './fs.js';
 export { denialMessage, isInsideEditRoots, permitPath, type PermitOptions } from './guard.js';
+export { guardFs, isPathNotPermitted, PathNotPermittedError } from './guarded-fs.js';
 export {
   createBridgeMiddleware,
   sveBridge,

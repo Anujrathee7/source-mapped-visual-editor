@@ -12,6 +12,7 @@ import type { AgentEnv, AgentRetry, AgentRunner } from './agent/types.js';
 import { lineDiff } from './diff.js';
 import { nodeFs, type BridgeFs } from './fs.js';
 import { denialMessage, isInsideEditRoots, permitPath } from './guard.js';
+import { guardFs, isPathNotPermitted } from './guarded-fs.js';
 import { ProgressHub } from './progress.js';
 import { buildPrompt, buildRetryPrompt } from './prompt.js';
 import { SerialQueue } from './queue.js';
@@ -64,6 +65,16 @@ export function createBridge(options: BridgeOptions): Bridge {
   const root = path.resolve(options.root);
   const editRoots = (options.editRoots ?? [root]).map((editRoot) => path.resolve(editRoot));
   const fs = options.fs ?? nodeFs;
+  /**
+   * The only handle a runner ever sees (AC-7.1).
+   *
+   * `fs` above stays unguarded on purpose (AC-7.5): the bridge writes snapshots
+   * into `.sve/undo/`, which is deliberately *outside* `editRoots`, and reads
+   * the target file to build the prompt and to diff what changed. Guarding the
+   * bridge's own handle would fail every snapshot, and that failure would read
+   * as broken undo rather than as an over-tight guard.
+   */
+  const runnerFs = guardFs(fs, editRoots);
   const agent = options.agent ?? resolveAgentRunner(options.env);
   const queue = new SerialQueue();
   const progress = new ProgressHub();
@@ -141,7 +152,7 @@ export function createBridge(options: BridgeOptions): Bridge {
         editRoots,
         prompt,
         ...(attempt ? { retry: attempt } : {}),
-        fs,
+        fs: runnerFs,
         signal: lifetime.signal,
         canUseTool: (request) => permitPath(request.path, { root, editRoots, fs }),
         report(update) {
@@ -191,6 +202,13 @@ export function createBridge(options: BridgeOptions): Bridge {
           };
       }
     } catch (error) {
+      // A runner that reached past the guard threw rather than returned, and the
+      // honest answer to the user is the same one a polite runner gets: the edit
+      // did not happen, and here is the path that was refused (AC-7.3). Reporting
+      // it as a generic `error` would hide a denial behind a stack trace.
+      if (isPathNotPermitted(error)) {
+        return { jobId, status: 'blocked', message: error.message };
+      }
       return { jobId, status: 'error', message: message(error) };
     } finally {
       announce(jobId, 'done');
