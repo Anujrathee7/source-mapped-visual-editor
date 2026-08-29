@@ -21,9 +21,9 @@
  * leaks source paths.
  */
 import path from 'node:path';
-import type { Plugin } from 'vite';
-import { createBridgeMiddleware, type BridgeMiddleware } from '@sve/bridge';
-import { sourceLoc } from '@sve/source-loc';
+import { searchForWorkspaceRoot, type Plugin } from 'vite';
+import { createBridgeMiddleware, type AgentRunner, type BridgeMiddleware } from '@sve/bridge';
+import { sourceLoc, type StampReport } from '@sve/source-loc';
 import {
   CLIENT_ENTRY_SPECIFIER,
   DEFAULT_SETTLE_MS,
@@ -31,6 +31,7 @@ import {
   RESOLVED_ENTRY_ID,
   VIRTUAL_ENTRY_ID,
 } from './constants.js';
+import { CLIENT_ENTRY_PATH, CLIENT_PACKAGES, clientPackageDirs } from './locate.js';
 
 export interface SveOptions {
   /**
@@ -70,6 +71,27 @@ export interface SveOptions {
 
   /** How long hot reload must stay quiet before the page counts as settled. */
   settleMs?: number;
+
+  /**
+   * The coding agent this server's bridge runs. Defaults to whatever `SVE_AGENT` selects.
+   *
+   * A host opens several projects in one process (AC-11.7), and `SVE_AGENT` is one string
+   * for the whole of it. Constructing the runner per session and passing it in is what
+   * lets two sessions differ — and what keeps a process-wide environment variable from
+   * deciding something a caller already decided.
+   */
+  agent?: AgentRunner;
+
+  /**
+   * Called with the mounted middleware, so its owner can close it.
+   *
+   * `configureServer` is the only place the middleware exists, and in middleware mode
+   * there is no `httpServer` whose `close` event could stand in for one (AC-11.6).
+   */
+  onMiddleware?: (middleware: BridgeMiddleware) => void;
+
+  /** Forwarded to the stamping pass: one report per file it considered (AC-11.4). */
+  onStamp?: (report: StampReport) => void;
 }
 
 /** The shape serialised into the virtual module and handed to the client's `boot()`. */
@@ -93,6 +115,33 @@ function editorPlugin(options: SveOptions): Plugin {
     name: 'sve:editor',
     apply: 'serve',
 
+    /**
+     * What the dev server needs to know before it can serve a package the project has
+     * never heard of (AC-11.3).
+     *
+     * `fs.allow` is the delicate one. vite resolves it as `raw?.fs?.allow ?? [workspaceRoot]`,
+     * so once *anything* sets it the default is gone — a plugin that returns only its own
+     * directories takes the project's own source away from it. When the project set no
+     * list we therefore spell the default out ourselves and add to it; when it set one,
+     * vite concatenates, so we return only ours and repeat none of theirs.
+     */
+    config(userConfig) {
+      const configRoot = path.resolve(userConfig.root ?? options.root ?? process.cwd());
+      const explicit = userConfig.server?.fs?.allow;
+      const ours = clientPackageDirs();
+
+      return {
+        server: {
+          fs: { allow: explicit === undefined ? [searchForWorkspaceRoot(configRoot), ...ours] : ours },
+        },
+        // Our packages are TypeScript source living outside the project, and pre-bundling
+        // them would both fail to find them and freeze a copy the dev server cannot
+        // hot-replace. Named transitively: excluding only the entry leaves the optimizer
+        // free to swallow what it imports.
+        optimizeDeps: { exclude: [...CLIENT_PACKAGES] },
+      };
+    },
+
     configResolved(config) {
       // An explicit root wins; otherwise follow the dev server's, so the loc the Babel
       // pass writes and the path the bridge resolves are the same string.
@@ -103,15 +152,40 @@ function editorPlugin(options: SveOptions): Plugin {
       middleware = createBridgeMiddleware({
         root,
         editRoots: options.editRoots ?? [path.resolve(root, 'src')],
+        ...(options.agent === undefined ? {} : { agent: options.agent }),
       });
       server.middlewares.use(middleware);
+      options.onMiddleware?.(middleware);
       // A queue that outlives its server is a queue writing to a project nobody is
       // watching. `once` rather than `on`: closing twice must not double-abort.
       server.httpServer?.once('close', () => middleware?.close());
     },
 
+    /**
+     * The other half of the close path (AC-11.6).
+     *
+     * In middleware mode `server.httpServer` is null and the hook above is registered on
+     * nothing, so the queue and the lifetime controller outlive the server. `buildEnd` is
+     * what vite's plugin container calls from `server.close()` in either mode, and
+     * `close()` is idempotent, so registering both is a belt and not a second abort.
+     */
+    buildEnd() {
+      middleware?.close();
+    },
+
     resolveId(id) {
-      return id === VIRTUAL_ENTRY_ID ? RESOLVED_ENTRY_ID : undefined;
+      if (id === VIRTUAL_ENTRY_ID) return RESOLVED_ENTRY_ID;
+      /**
+       * The specifier stays bare in the emitted module — see `constants.ts` for why an
+       * `/@fs/` id written into source is the wrong shape — and is turned into a path
+       * here, where a path is just a resolver's answer and vite spells the URL itself.
+       *
+       * Without this the import is resolved through the *project's* `node_modules`, which
+       * in someone else's repository has never heard of `@sve`; and the importer is a
+       * virtual module, so there is not even a directory to resolve it relative to.
+       */
+      if (id === CLIENT_ENTRY_SPECIFIER) return CLIENT_ENTRY_PATH;
+      return undefined;
     },
 
     load(id) {
@@ -150,7 +224,10 @@ function editorPlugin(options: SveOptions): Plugin {
 export function sve(options: SveOptions = {}): Plugin[] {
   if (options.enabled === false) return [];
   return [
-    sourceLoc(options.root === undefined ? {} : { root: options.root }),
+    sourceLoc({
+      ...(options.root === undefined ? {} : { root: options.root }),
+      ...(options.onStamp === undefined ? {} : { onStamp: options.onStamp }),
+    }),
     editorPlugin(options),
   ];
 }

@@ -7,6 +7,7 @@
  * the filesystem into the browser bundle.
  */
 export { sve, type ClientConfig, type SveOptions } from './plugin.js';
+export { CLIENT_ENTRY_PATH, CLIENT_PACKAGES, clientPackageDirs } from './locate.js';
 export {
   CLIENT_ENTRY_SPECIFIER,
   DEFAULT_SETTLE_MS,
