@@ -191,7 +191,10 @@ const SDK_MODULE = '@anthropic-ai/claude-agent-sdk';
  */
 async function loadQuery(): Promise<SdkQuery> {
   try {
-    const sdk = (await import(SDK_MODULE)) as { query: SdkQuery };
+    // `@vite-ignore`: the specifier is a variable precisely so it is not
+    // analysed, and the dev server should not warn about the one thing that
+    // makes the peer optional.
+    const sdk = (await import(/* @vite-ignore */ SDK_MODULE)) as { query: SdkQuery };
     return sdk.query;
   } catch (cause) {
     throw new Error(
