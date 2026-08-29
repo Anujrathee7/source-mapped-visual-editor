@@ -17,7 +17,7 @@
  */
 import { mountOverlay, type OverlayHandle } from '@sve/overlay';
 import { createEditorSession, type EditorSession } from './session.js';
-import { studioPeer, type FrameView, type PreviewHandle } from './preview.js';
+import { startPreviewServer, studioPeer, type FrameView, type PreviewHandle } from './preview.js';
 import type { HotLike } from './verify.js';
 
 /** Mirrors `SVE_SOURCE_PATH` in `@sve/bridge`, which is Node-only and cannot be imported here. */
@@ -102,19 +102,17 @@ export function startEditor(options: BootOptions = {}, doc: Document = document)
   if (decision.ok) {
     let handle: PreviewHandle | null = null;
     let stopped = false;
-    // Lazy: this is the only path that pays for `@sve/rpc` and `@sve/studio/preview`.
-    const preview = import('./preview.js')
-      .then((module) =>
-        module.startPreviewServer({
-          overlay,
-          peer: decision.peer,
-          document: doc,
-          hot,
-          fetchSource,
-          ...(options.verifyTimeoutMs === undefined ? {} : { verifyTimeoutMs: options.verifyTimeoutMs }),
-          ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }),
-        }),
-      )
+    // Async because `startPreviewServer` reaches `@sve/rpc` and `@sve/studio/preview`
+    // through a dynamic import: this is the only path that pays for either of them.
+    const preview = startPreviewServer({
+      overlay,
+      peer: decision.peer,
+      document: doc,
+      hot,
+      fetchSource,
+      ...(options.verifyTimeoutMs === undefined ? {} : { verifyTimeoutMs: options.verifyTimeoutMs }),
+      ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }),
+    })
       .then((started) => {
         handle = started;
         // A reload that raced the import must not leave a server listening on a document
